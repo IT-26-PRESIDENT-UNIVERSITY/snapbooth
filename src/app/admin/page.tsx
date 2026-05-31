@@ -2,12 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
-import { idbSaveImage, idbLoadAllImages, idbDeleteImage } from '@/lib/idb';
 import { Trash2, Upload, Plus, AlertCircle, ArrowLeft, Lock } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AdminPage() {
-  const { templates, addCustomTemplate, removeCustomTemplate, toggleTemplateActive, hydrateTemplateUrl } = useStore();
+  const { templates, fetchGlobalTemplates } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -16,20 +15,13 @@ export default function AdminPage() {
 
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [removeBlack, setRemoveBlack] = useState(true);
   const [selectedLayout, setSelectedLayout] = useState<'single' | 'strip-3' | 'grid-4'>('single');
-  const [idbLoaded, setIdbLoaded] = useState(false);
-  const reuploadRef = useRef<HTMLInputElement>(null);
-  const [reuploadTargetId, setReuploadTargetId] = useState<string | null>(null);
 
-  // Hydrate custom template URLs from IndexedDB on mount
   useEffect(() => {
-    idbLoadAllImages().then(images => {
-      Object.entries(images).forEach(([id, url]) => {
-        hydrateTemplateUrl(id, url);
-      });
-    }).catch(console.error).finally(() => setIdbLoaded(true));
-  }, [hydrateTemplateUrl]);
+    if (isAuthenticated) {
+      fetchGlobalTemplates();
+    }
+  }, [isAuthenticated, fetchGlobalTemplates]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,78 +34,6 @@ export default function AdminPage() {
     }
   };
 
-  const processImageRemovingBlack = (dataUrl: string): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(dataUrl);
-        ctx.drawImage(img, 0, 0);
-
-        try {
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
-          const W = canvas.width;
-          const H = canvas.height;
-
-          // Only pixels that are very dark qualify as "black slot"
-          const isBlack = (x: number, y: number) => {
-            const i = (y * W + x) * 4;
-            return data[i] < 40 && data[i + 1] < 40 && data[i + 2] < 40;
-          };
-
-          // Connected component labeling — find all contiguous black regions
-          const visited = new Uint8Array(W * H);
-          // Minimum size to be considered a "photo slot" (0.5% of total pixels)
-          const MIN_SLOT_SIZE = W * H * 0.005;
-
-          for (let startY = 0; startY < H; startY++) {
-            for (let startX = 0; startX < W; startX++) {
-              const startPos = startY * W + startX;
-              if (!isBlack(startX, startY) || visited[startPos]) continue;
-
-              // BFS / flood-fill this connected black region
-              const region: number[] = [];
-              const stack = [startPos];
-              visited[startPos] = 1;
-
-              while (stack.length > 0) {
-                const pos = stack.pop()!;
-                region.push(pos);
-                const x = pos % W;
-                const y = Math.floor(pos / W);
-
-                if (x > 0     && !visited[pos - 1] && isBlack(x - 1, y)) { visited[pos - 1] = 1; stack.push(pos - 1); }
-                if (x < W - 1 && !visited[pos + 1] && isBlack(x + 1, y)) { visited[pos + 1] = 1; stack.push(pos + 1); }
-                if (y > 0     && !visited[pos - W] && isBlack(x, y - 1)) { visited[pos - W] = 1; stack.push(pos - W); }
-                if (y < H - 1 && !visited[pos + W] && isBlack(x, y + 1)) { visited[pos + W] = 1; stack.push(pos + W); }
-              }
-
-              // Only erase LARGE regions = photo slots. Small regions = logos/text → keep.
-              if (region.length >= MIN_SLOT_SIZE) {
-                for (const pos of region) {
-                  data[pos * 4 + 3] = 0; // transparent
-                }
-              }
-            }
-          }
-
-          ctx.putImageData(imageData, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        } catch (e) {
-          console.error('Canvas processing failed', e);
-          resolve(dataUrl);
-        }
-      };
-      img.onerror = () => resolve(dataUrl);
-      img.src = dataUrl;
-    });
-  };
-
-
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -123,46 +43,40 @@ export default function AdminPage() {
 
     const file = files[0];
 
-    // 10MB limit — IndexedDB can handle much more than localStorage
-    if (file.size > 10 * 1024 * 1024) {
-      setError('Ukuran file maksimal 10MB.');
+    // Netlify Functions limit ~6MB payload, so we strictly enforce 2MB per image to be safe
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Ukuran file maksimal 2MB.');
       setIsUploading(false);
       return;
     }
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      let dataUrl = event.target?.result as string;
-
-      if (removeBlack) {
-        try { dataUrl = await processImageRemovingBlack(dataUrl); }
-        catch (err) { console.error('Failed to remove black bg', err); }
-      }
-
+      const dataUrl = event.target?.result as string;
       const id = `custom-${Date.now()}`;
 
-      // Save image to IndexedDB (no localStorage quota issue)
       try {
-        await idbSaveImage(id, dataUrl);
+        const res = await fetch('/api/templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            name: file.name.replace(/\.[^/.]+$/, ''),
+            layout: selectedLayout,
+            imageBase64: dataUrl
+          })
+        });
+
+        if (!res.ok) throw new Error('Failed to save on server');
+        
+        await fetchGlobalTemplates();
       } catch (err) {
-        console.error('IndexedDB save failed', err);
-        setError('Gagal menyimpan gambar ke browser storage.');
+        console.error('Upload failed', err);
+        setError('Gagal mengunggah template ke server.');
+      } finally {
         setIsUploading(false);
-        return;
+        if (fileInputRef.current) fileInputRef.current.value = '';
       }
-
-      // Save metadata (without url) to zustand/localStorage
-      addCustomTemplate({
-        id,
-        name: file.name.replace(/\.[^/.]+$/, ''),
-        url: dataUrl, // runtime url — will be reloaded from IndexedDB next session
-        isCustom: true,
-        active: true,
-        layout: selectedLayout,
-      });
-
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.onerror = () => {
       setError('Gagal membaca file gambar.');
@@ -171,29 +85,27 @@ export default function AdminPage() {
     reader.readAsDataURL(file);
   };
 
-
-  // Re-upload a broken template (replace image for existing id)
-  const handleReupload = (templateId: string) => {
-    setReuploadTargetId(templateId);
-    reuploadRef.current?.click();
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Hapus template ${name}?`)) return;
+    try {
+      await fetch(`/api/templates/${id}`, { method: 'DELETE' });
+      await fetchGlobalTemplates();
+    } catch (err) {
+      alert('Gagal menghapus template');
+    }
   };
 
-  const handleReuploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !reuploadTargetId) return;
-    const file = files[0];
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      let dataUrl = event.target?.result as string;
-      if (removeBlack) {
-        try { dataUrl = await processImageRemovingBlack(dataUrl); } catch (_) {}
-      }
-      await idbSaveImage(reuploadTargetId, dataUrl);
-      hydrateTemplateUrl(reuploadTargetId, dataUrl);
-      setReuploadTargetId(null);
-      if (reuploadRef.current) reuploadRef.current.value = '';
-    };
-    reader.readAsDataURL(file);
+  const handleToggle = async (id: string, active: boolean) => {
+    try {
+      await fetch(`/api/templates/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active })
+      });
+      await fetchGlobalTemplates();
+    } catch (err) {
+      alert('Gagal mengubah status');
+    }
   };
 
   if (!isAuthenticated) {
@@ -231,7 +143,7 @@ export default function AdminPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 pb-4 border-b border-gray-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-1">Manajemen Template</h1>
-          <p className="text-gray-500 text-xs sm:text-sm">Upload frame custom untuk photobooth (Tersimpan di browser lokal)</p>
+          <p className="text-gray-500 text-xs sm:text-sm">Upload frame custom untuk photobooth (Tersinkron Global via Netlify)</p>
         </div>
         <Link href="/" className="btn-secondary px-4 py-2 flex items-center gap-2 self-start sm:self-auto text-sm">
           <ArrowLeft size={16} /> Ke Photobooth
@@ -257,7 +169,6 @@ export default function AdminPage() {
                 <option value="strip-3">3 Foto (Strip Vertikal)</option>
                 <option value="grid-4">4 Foto (Grid 2x2)</option>
               </select>
-              <p className="text-[11px] text-gray-500 mt-1">Kamera akan memotret sesuai jumlah ini.</p>
             </div>
             
             <div 
@@ -278,23 +189,10 @@ export default function AdminPage() {
               />
             </div>
             
-            <label className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg cursor-pointer border border-gray-100 hover:border-gray-300 transition-colors">
-              <input 
-                type="checkbox" 
-                checked={removeBlack} 
-                onChange={(e) => setRemoveBlack(e.target.checked)}
-                className="mt-1 w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
-              />
-              <div>
-                <div className="text-sm font-medium text-gray-900">Hapus Latar Hitam</div>
-                <div className="text-xs text-gray-500 leading-relaxed mt-0.5">Bolongkan warna hitam otomatis.</div>
-              </div>
-            </label>
-
             {isUploading && (
               <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm flex items-center gap-2 text-gray-600">
                 <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
-                Memproses gambar...
+                Mengunggah ke server...
               </div>
             )}
 
@@ -324,18 +222,6 @@ export default function AdminPage() {
                         className="max-w-full max-h-full object-contain drop-shadow-md"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
-                    ) : idbLoaded ? (
-                      // Image data lost — need re-upload
-                      <div className="flex flex-col items-center gap-2 text-center p-2">
-                        <div className="text-2xl">⚠️</div>
-                        <p className="text-xs text-red-500 font-medium">Gambar hilang</p>
-                        <button
-                          onClick={() => handleReupload(template.id)}
-                          className="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-full font-medium flex items-center gap-1"
-                        >
-                          <Upload size={10} /> Upload Ulang
-                        </button>
-                      </div>
                     ) : (
                       <div className="text-xs text-gray-400">Memuat...</div>
                     )}
@@ -355,7 +241,7 @@ export default function AdminPage() {
                       </div>
                       
                       <button 
-                        onClick={() => toggleTemplateActive(template.id)}
+                        onClick={() => handleToggle(template.id, !template.active)}
                         className={`w-10 h-5 rounded-full relative transition-colors ${template.active ? 'bg-black' : 'bg-gray-300'}`}
                       >
                         <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-all ${template.active ? 'left-[22px]' : 'left-[3px]'}`} />
@@ -364,12 +250,7 @@ export default function AdminPage() {
                     
                     {template.isCustom && (
                       <button
-                        onClick={async () => {
-                          if (confirm(`Hapus template ${template.name}?`)) {
-                            await idbDeleteImage(template.id);
-                            removeCustomTemplate(template.id);
-                          }
-                        }}
+                        onClick={() => handleDelete(template.id, template.name)}
                         className="w-full py-1.5 flex items-center justify-center gap-1.5 text-xs font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded transition-colors"
                       >
                         <Trash2 size={12} /> Hapus
@@ -379,9 +260,6 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
-
-            {/* Hidden input for re-uploading broken templates */}
-            <input ref={reuploadRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleReuploadFile} />
 
             {templates.length === 0 && (
               <div className="text-center py-12 text-gray-400 text-sm">

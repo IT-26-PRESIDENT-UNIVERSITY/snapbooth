@@ -568,13 +568,7 @@ export default function PhotoboothStudio() {
               >
                 <Video size={14} /> <span className="hidden sm:inline">{livePhotoEnabled ? 'Live' : 'Live Off'}</span>
               </button>
-              <button
-                onClick={() => setRemoveBackground(!removeBackground)}
-                className={`w-9 h-9 flex items-center justify-center rounded-full backdrop-blur-md transition-colors border border-white/20 ${removeBackground ? 'bg-white text-black border-transparent' : 'bg-black/20 text-white hover:bg-black/40'}`}
-                title="Hapus Latar Belakang"
-              >
-                <User size={16} />
-              </button>
+
               <button
                 onClick={() => setFacingMode(m => m === 'user' ? 'environment' : 'user')}
                 className="w-9 h-9 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-md text-white border border-white/20 hover:bg-black/40"
