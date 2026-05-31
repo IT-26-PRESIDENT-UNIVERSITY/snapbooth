@@ -1,6 +1,8 @@
 import { getStore } from '@netlify/blobs';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const store = getStore('snapbooth');
