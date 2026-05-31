@@ -13,9 +13,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return new NextResponse('Not found', { status: 404 });
     }
 
-    return new NextResponse(imageBase64, {
+    const matches = imageBase64.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      // Fallback in case it was saved as raw text
+      return new NextResponse(imageBase64, {
+        headers: { 'Content-Type': 'text/plain' }
+      });
+    }
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'text/plain',
+        'Content-Type': mimeType,
         'Cache-Control': 'public, max-age=31536000, immutable'
       }
     });
