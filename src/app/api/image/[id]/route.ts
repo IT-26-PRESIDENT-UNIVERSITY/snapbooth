@@ -7,9 +7,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   try {
     const { id } = await params;
     const store = getStore('snapbooth');
-    const imageBase64 = await store.get(`image_${id}`);
+    const imageBase64 = await store.get(`image_${id}`, { type: 'text' });
     
-    if (!imageBase64) {
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
       return new NextResponse('Not found', { status: 404 });
     }
 
