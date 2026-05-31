@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1a1a1a;
+  --color-secondary: #4a4a4a;
+  --color-background: #fdfdfc;
+  --color-foreground: #1a1a1a;
+  --color-surface: #ffffff;
+  --color-border-dim: #eaeaea;
+  --color-border-strong: #d1d1d1;
+}
+
+:root {
+  --background: #fdfdfc;
+  --foreground: #1a1a1a;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-family: var(--font-poppins), system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Base bespoke classes */
+.glass-panel {
+  @apply bg-surface border border-border-dim rounded-lg shadow-[0_2px_10px_rgba(0,0,0,0.03)];
+}
+
+.btn-primary {
+  @apply bg-primary text-white font-medium rounded-md px-6 py-3 text-sm tracking-wide transition-all duration-300 hover:bg-black hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply bg-surface border border-border-strong text-foreground font-medium rounded-md px-6 py-3 text-sm transition-all duration-300 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #e5e5e5;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #d4d4d4;
+}
+
+/* Animations */
+@keyframes countdownPop {
+  0% { transform: scale(1.1); opacity: 0; }
+  20% { transform: scale(1); opacity: 1; }
+  80% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0; }
+}
+.animate-countdown {
+  animation: countdownPop 1s cubic-bezier(0.4, 0, 0.2, 1);
+}

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.svg.org/2000/svg" viewBox="0 0 1200 1800" width="1200" height="1800">
+  <defs>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="3" result="noise" />
+      <feColorMatrix type="matrix" values="1 0 0 0 0  0 0.8 0 0 0  0 0.6 0 0 0  0 0 0 0.2 0" in="noise" result="coloredNoise" />
+      <feBlend in="SourceGraphic" in2="coloredNoise" mode="multiply" />
+    </filter>
+  </defs>
+
+  <!-- Base film color with transparent center -->
+  <path d="M0,0 L1200,0 L1200,1800 L0,1800 Z M150,50 L150,1750 L1050,1750 L1050,50 Z" fill="#111111" fill-rule="evenodd" filter="url(#grain)" />
+
+  <!-- Left film holes -->
+  <g fill="#ffffff" opacity="0.8">
+    <!-- Generating multiple holes -->
+    <rect x="30" y="100" width="60" height="80" rx="10" />
+    <rect x="30" y="250" width="60" height="80" rx="10" />
+    <rect x="30" y="400" width="60" height="80" rx="10" />
+    <rect x="30" y="550" width="60" height="80" rx="10" />
+    <rect x="30" y="700" width="60" height="80" rx="10" />
+    <rect x="30" y="850" width="60" height="80" rx="10" />
+    <rect x="30" y="1000" width="60" height="80" rx="10" />
+    <rect x="30" y="1150" width="60" height="80" rx="10" />
+    <rect x="30" y="1300" width="60" height="80" rx="10" />
+    <rect x="30" y="1450" width="60" height="80" rx="10" />
+    <rect x="30" y="1600" width="60" height="80" rx="10" />
+  </g>
+
+  <!-- Right film holes -->
+  <g fill="#ffffff" opacity="0.8">
+    <rect x="1110" y="100" width="60" height="80" rx="10" />
+    <rect x="1110" y="250" width="60" height="80" rx="10" />
+    <rect x="1110" y="400" width="60" height="80" rx="10" />
+    <rect x="1110" y="550" width="60" height="80" rx="10" />
+    <rect x="1110" y="700" width="60" height="80" rx="10" />
+    <rect x="1110" y="850" width="60" height="80" rx="10" />
+    <rect x="1110" y="1000" width="60" height="80" rx="10" />
+    <rect x="1110" y="1150" width="60" height="80" rx="10" />
+    <rect x="1110" y="1300" width="60" height="80" rx="10" />
+    <rect x="1110" y="1450" width="60" height="80" rx="10" />
+    <rect x="1110" y="1600" width="60" height="80" rx="10" />
+  </g>
+
+  <!-- Text -->
+  <text x="600" y="1720" font-family="serif" font-size="40" fill="#ccaaaa" text-anchor="middle" letter-spacing="8" opacity="0.7">KODAK PORTRA 400</text>
+</svg>

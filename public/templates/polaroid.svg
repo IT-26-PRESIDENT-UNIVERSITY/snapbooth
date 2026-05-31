@@ -1,0 +1,13 @@
+<svg xmlns="http://www.svg.org/2000/svg" viewBox="0 0 1200 1800" width="1200" height="1800">
+  <defs>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="10" stdDeviation="15" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <!-- Background with transparent center -->
+  <path d="M0,0 L1200,0 L1200,1800 L0,1800 Z M100,100 L100,1400 L1100,1400 L1100,100 Z" fill="#ffffff" fill-rule="evenodd" filter="url(#shadow)" />
+  
+  <!-- Text at bottom -->
+  <text x="600" y="1600" font-family="Arial, sans-serif" font-size="60" font-weight="bold" fill="#333" text-anchor="middle" letter-spacing="10">SNAPBOOTH</text>
+  <text x="600" y="1680" font-family="Arial, sans-serif" font-size="30" fill="#666" text-anchor="middle" letter-spacing="5">EST. 2024</text>
+</svg>
