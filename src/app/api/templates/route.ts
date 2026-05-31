@@ -3,14 +3,33 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+const defaultTemplates = [
+  { id: 'builtin-1', name: 'Polaroid Classic', url: '/templates/polaroid.svg', isCustom: false, active: true, layout: 'single' },
+  { id: 'builtin-2', name: 'Neon Cyberpunk', url: '/templates/neon.svg', isCustom: false, active: true, layout: 'single' },
+  { id: 'builtin-3', name: 'Vintage Film', url: '/templates/vintage.svg', isCustom: false, active: true, layout: 'single' },
+];
+
 export async function GET() {
   try {
     const store = getStore('snapbooth');
-    const meta = await store.get('metadata', { type: 'json' });
-    return NextResponse.json(meta || []);
+    let meta = await store.get('metadata', { type: 'json' });
+    
+    // Seed default templates on first run
+    if (!meta || !Array.isArray(meta) || meta.length === 0) {
+      meta = defaultTemplates;
+      await store.setJSON('metadata', meta);
+    }
+    
+    // Ensure built-in templates always exist in metadata in case they were lost
+    if (!meta.find((t: any) => t.id === 'builtin-1')) {
+       meta = [...defaultTemplates, ...meta.filter((t: any) => t.isCustom)];
+       await store.setJSON('metadata', meta);
+    }
+    
+    return NextResponse.json(meta);
   } catch (error) {
     console.error('Failed to get templates from Netlify Blobs:', error);
-    return NextResponse.json([], { status: 500 });
+    return NextResponse.json(defaultTemplates, { status: 500 });
   }
 }
 

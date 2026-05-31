@@ -34,17 +34,11 @@ interface PhotoboothState {
   setRemoveBackground: (val: boolean) => void;
 }
 
-const defaultTemplates: Template[] = [
-  { id: 'builtin-1', name: 'Polaroid Classic', url: '/templates/polaroid.svg', isCustom: false, active: true },
-  { id: 'builtin-2', name: 'Neon Cyberpunk', url: '/templates/neon.svg', isCustom: false, active: true },
-  { id: 'builtin-3', name: 'Vintage Film', url: '/templates/vintage.svg', isCustom: false, active: true },
-];
-
 export const useStore = create<PhotoboothState>()((set, get) => ({
   format: 'single',
   setFormat: (format) => set({ format }),
 
-  templates: defaultTemplates,
+  templates: [],
   setTemplates: (templates) => set({ templates }),
   
   fetchGlobalTemplates: async () => {
@@ -52,11 +46,11 @@ export const useStore = create<PhotoboothState>()((set, get) => ({
       const res = await fetch('/api/templates');
       if (res.ok) {
         const meta = await res.json();
-        const customTemplates: Template[] = meta.map((m: any) => ({
+        const allTemplates: Template[] = meta.map((m: any) => ({
           ...m,
-          url: `/api/image/${m.id}`
+          url: m.isCustom ? `/api/image/${m.id}` : m.url
         }));
-        set({ templates: [...defaultTemplates, ...customTemplates] });
+        set({ templates: allTemplates });
       }
     } catch (e) {
       console.error('Failed to fetch global templates', e);
