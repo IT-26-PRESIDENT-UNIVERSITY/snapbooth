@@ -60,7 +60,9 @@ export default function AdminPage() {
 
           // Connected component labeling — find all contiguous black regions
           const visited = new Uint8Array(W * H);
-          const MIN_SLOT_SIZE = W * H * 0.005; // 0.5% of total pixels
+          // 8% threshold: hanya hapus area hitam yang sangat besar (slot foto),
+          // elemen kecil seperti logo/teks tetap aman.
+          const MIN_SLOT_SIZE = W * H * 0.08;
 
           for (let startY = 0; startY < H; startY++) {
             for (let startX = 0; startX < W; startX++) {
