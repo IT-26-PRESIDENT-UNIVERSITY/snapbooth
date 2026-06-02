@@ -392,9 +392,9 @@ export default function PhotoboothStudio() {
     const H = tplImg.naturalHeight || 1800;
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
-    const ctx = c.getContext('2d')!;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, W, H);
+    const ctx = c.getContext('2d', { alpha: true })!;
+    // Keep transparent — template PNG will provide the background
+    ctx.clearRect(0, 0, W, H);
 
     const photos = capturedRef.current;
 
@@ -449,7 +449,7 @@ export default function PhotoboothStudio() {
     // Overlay template on top
     ctx.drawImage(tplImg, 0, 0, W, H);
 
-    const finalData = c.toDataURL('image/jpeg', 0.92);
+    const finalData = c.toDataURL('image/png');
     setFinalImage(finalData);
 
     const id = Math.random().toString(36).slice(2, 10);
@@ -603,6 +603,23 @@ export default function PhotoboothStudio() {
                 className={`absolute inset-0 w-full h-full object-cover ${removeBackground ? 'z-10' : 'hidden'}`}
               />
 
+
+              {/* Template frame guide overlay — shows while capturing */}
+              {selectedTemplate?.url && (
+                <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={selectedTemplate.url}
+                    alt="frame guide"
+                    className="absolute inset-0 w-full h-full object-cover opacity-70"
+                    style={{ mixBlendMode: 'normal' }}
+                  />
+                  {/* Darkened corners to visually indicate the framing area */}
+                  <div className="absolute inset-0" style={{
+                    background: 'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.25) 100%)'
+                  }} />
+                </div>
+              )}
 
               {/* Countdown overlay */}
               {countdown !== null && (
