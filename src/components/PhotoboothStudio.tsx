@@ -393,13 +393,20 @@ export default function PhotoboothStudio() {
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const ctx = c.getContext('2d', { alpha: true })!;
-    // Keep transparent — template PNG will provide the background
     ctx.clearRect(0, 0, W, H);
+
+    // ── Builtin slot hints (SVGs cannot be pixel-scanned reliably) ──────────
+    const builtinSlots: Record<string, Array<{x:number;y:number;w:number;h:number}>> = {
+      'builtin-1': [{x:100, y:100, w:1000, h:1300}],  // Polaroid
+      'builtin-2': [{x:60,  y:60,  w:1080, h:1660}],  // Neon
+      'builtin-3': [{x:150, y:50,  w:900,  h:1700}],  // Vintage Film
+    };
+    const builtinHint = selectedTemplate?.id ? builtinSlots[selectedTemplate.id] : undefined;
 
     const photos = capturedRef.current;
 
-    // Auto-detect slot positions from transparent areas of template
-    const slots = detectSlots(tplImg, photos.length);
+    // Auto-detect slot positions — use builtin hint first, then pixel scan
+    const slots = builtinHint || detectSlots(tplImg, photos.length);
 
     for (let i = 0; i < photos.length; i++) {
       const pImg = new Image();

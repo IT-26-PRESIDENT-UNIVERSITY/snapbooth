@@ -1,13 +1,24 @@
-<svg xmlns="http://www.svg.org/2000/svg" viewBox="0 0 1200 1800" width="1200" height="1800">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1800" width="1200" height="1800">
   <defs>
-    <filter id="shadow">
-      <feDropShadow dx="0" dy="10" stdDeviation="15" flood-opacity="0.3"/>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.2"/>
     </filter>
   </defs>
-  <!-- Background with transparent center -->
-  <path d="M0,0 L1200,0 L1200,1800 L0,1800 Z M100,100 L100,1400 L1100,1400 L1100,100 Z" fill="#ffffff" fill-rule="evenodd" filter="url(#shadow)" />
-  
-  <!-- Text at bottom -->
-  <text x="600" y="1600" font-family="Arial, sans-serif" font-size="60" font-weight="bold" fill="#333" text-anchor="middle" letter-spacing="10">SNAPBOOTH</text>
-  <text x="600" y="1680" font-family="Arial, sans-serif" font-size="30" fill="#666" text-anchor="middle" letter-spacing="5">EST. 2024</text>
+
+  <!-- White frame background (everything EXCEPT the photo area) -->
+  <!-- Using evenodd to punch a transparent hole -->
+  <path d="M0,0 H1200 V1800 H0 Z M100,100 H1100 V1400 H100 Z"
+        fill="#ffffff" fill-rule="evenodd"/>
+
+  <!-- Frame border decoration -->
+  <rect x="100" y="100" width="1000" height="1300" fill="none" stroke="#e0e0e0" stroke-width="2"/>
+
+  <!-- Bottom label area -->
+  <rect x="0" y="1400" width="1200" height="400" fill="#ffffff"/>
+  <line x1="80" y1="1440" x2="1120" y2="1440" stroke="#eeeeee" stroke-width="1.5"/>
+
+  <!-- Text -->
+  <text x="600" y="1560" font-family="'Helvetica Neue', Arial, sans-serif" font-size="56" font-weight="700" fill="#1a1a1a" text-anchor="middle" letter-spacing="12">SNAPBOOTH</text>
+  <text x="600" y="1640" font-family="'Helvetica Neue', Arial, sans-serif" font-size="28" fill="#999" text-anchor="middle" letter-spacing="6">EST. 2024</text>
+  <text x="600" y="1720" font-family="'Helvetica Neue', Arial, sans-serif" font-size="22" fill="#ccc" text-anchor="middle" letter-spacing="3">✦ MEMORIES FOREVER ✦</text>
 </svg>
