@@ -28,12 +28,12 @@ export default function RootLayout({
         {/* Global Credit Footer */}
         <footer className="py-3 text-center bg-[#efefef] text-gray-500 text-[10px] font-semibold tracking-widest uppercase relative z-50">
           <a 
-            href="https://portofolio-salman.netlify.app/" 
+            href="https://it-26-president-university.github.io/it26-profile/" 
             target="_blank" 
-            rel="noopener noreferrer" 
-            className="hover:text-black transition-colors"
-          >
-            Created by Muhamad Salman
+            rel="noopener noreferrer"
+            className="hover:underline transition-all"
+            >
+            created jointly by students at President University IT 26
           </a>
         </footer>
       </body>
