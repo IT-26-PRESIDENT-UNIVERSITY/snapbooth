@@ -11,6 +11,12 @@ import Script from 'next/script';
 import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
 
+const FRAME_TEMPLATES = [
+  { id: 'polaroid', label: 'Polaroid', url: '/templates/polaroid.svg' },
+  { id: 'vintage', label: 'Vintage', url: '/templates/vintage.svg' },
+  { id: 'neon', label: 'Neon', url: '/templates/neon.svg' }
+];
+
 declare global {
   interface Window { SelfieSegmentation: any; }
 }
@@ -24,8 +30,8 @@ export default function PhotoboothStudio() {
   } = useStore();
 
   const webcamRef = useRef<Webcam>(null);
-  const maskCanvasRef = useRef<HTMLCanvasElement>(null);   // AI mask output
-  const liveCanvasRef = useRef<HTMLCanvasElement>(null);   // hidden canvas for live recording
+  const maskCanvasRef = useRef<HTMLCanvasElement>(null);
+  const liveCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [isFlashing, setIsFlashing] = useState(false);
@@ -35,25 +41,29 @@ export default function PhotoboothStudio() {
   const [downloadId, setDownloadId] = useState('');
   const [hostUrl, setHostUrl] = useState('');
 
-  // Settings
   const [timerDuration, setTimerDuration] = useState(3);
   const [livePhotoEnabled, setLivePhotoEnabled] = useState(true);
 
-  // Phase
   const [appPhase, setAppPhase] = useState<AppPhase>('capture');
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [retakeIndex, setRetakeIndex] = useState<number | null>(null);
 
-  // Result
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'photo' | 'video'>('photo');
 
-  // MediaRecorder refs — use refs not state to avoid stale closure
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  
+  const capturedRef = useRef<string[]>([]);
+  const retakeIndexRef = useRef<number | null>(null);
 
-  // ─── Auto-select first template ───────────────────────────────────────────
-  useEffect(() => {
+  const requiredPhotos =
+    selectedTemplate?.layout === 'single' ? 1
+    : selectedTemplate?.layout === 'strip-3' ? 3
+    : selectedTemplate?.layout === 'grid-4' ? 4
+    : (selectedTemplate?.isCustom ? 3 : 1);
+
+    useEffect(() => {
     const active = templates.filter(t => t.active);
     if (!selectedTemplate && active.length > 0) {
       setSelectedTemplate(active[0]);
@@ -64,14 +74,6 @@ export default function PhotoboothStudio() {
     if (typeof window !== 'undefined') setHostUrl(window.location.origin);
   }, []);
 
-  // ─── Required photos based on template layout ──────────────────────────────
-  const requiredPhotos =
-    selectedTemplate?.layout === 'single' ? 1
-    : selectedTemplate?.layout === 'strip-3' ? 3
-    : selectedTemplate?.layout === 'grid-4' ? 4
-    : (selectedTemplate?.isCustom ? 3 : 1);   // custom with no layout defaults to 3
-
-  // ─── AI Segmentation loop ─────────────────────────────────────────────────
   useEffect(() => {
     if (!removeBackground) return;
     let running = true;
@@ -114,13 +116,11 @@ export default function PhotoboothStudio() {
     return () => { running = false; seg?.close(); };
   }, [removeBackground]);
 
-  // ─── Live Photo canvas loop (runs always in background) ───────────────────
   useEffect(() => {
     let running = true;
     let raf: number;
-
-    // Pre-load template image for compositing
     let templateImg: HTMLImageElement | null = null;
+    
     if (selectedTemplate) {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -133,13 +133,14 @@ export default function PhotoboothStudio() {
       const video = webcamRef.current?.video;
       const lc = liveCanvasRef.current;
       const mc = maskCanvasRef.current;
+      
       if (lc && video && video.readyState >= 2) {
         const ctx = lc.getContext('2d');
         if (ctx) {
           if (lc.width !== video.videoWidth) lc.width = video.videoWidth;
           if (lc.height !== video.videoHeight) lc.height = video.videoHeight;
           ctx.clearRect(0, 0, lc.width, lc.height);
-          // Draw camera (mirrored or masked)
+          
           if (removeBackground && mc) {
             ctx.drawImage(mc, 0, 0, lc.width, lc.height);
           } else {
@@ -149,7 +150,7 @@ export default function PhotoboothStudio() {
             ctx.drawImage(video, 0, 0, lc.width, lc.height);
             ctx.restore();
           }
-          // Overlay template on the live video
+          
           if (templateImg) {
             ctx.drawImage(templateImg, 0, 0, lc.width, lc.height);
           }
@@ -157,18 +158,18 @@ export default function PhotoboothStudio() {
       }
       raf = requestAnimationFrame(draw);
     };
+    
     draw();
     return () => { running = false; cancelAnimationFrame(raf); };
-  }, [removeBackground]);
+  }, [removeBackground, selectedTemplate]);
 
-  // ─── Capture helpers ──────────────────────────────────────────────────────
   const grabFrame = async (): Promise<string | null> => {
     if (removeBackground && maskCanvasRef.current) {
       return maskCanvasRef.current.toDataURL('image/png');
     }
     const raw = webcamRef.current?.getScreenshot();
     if (!raw) return null;
-    // mirror it
+    
     const img = new Image();
     await new Promise(r => { img.onload = r; img.src = raw; });
     const c = document.createElement('canvas');
@@ -184,16 +185,10 @@ export default function PhotoboothStudio() {
     setTimeout(() => setIsFlashing(false), 120);
   };
 
-  // ─── Start / Snap sequence ────────────────────────────────────────────────
-  // Using refs to avoid stale closure problems inside setInterval
-  const capturedRef = useRef<string[]>([]);
-  const retakeIndexRef = useRef<number | null>(null);
-
   const startCaptureSequence = (startingPhotos: string[], forRetakeIndex: number | null) => {
     capturedRef.current = [...startingPhotos];
     retakeIndexRef.current = forRetakeIndex;
 
-    // Start live recorder (paused initially)
     if (livePhotoEnabled && !mediaRecorderRef.current && liveCanvasRef.current) {
       try {
         const stream = (liveCanvasRef.current as any).captureStream(30);
@@ -202,7 +197,7 @@ export default function PhotoboothStudio() {
         rec.start(100);
         setTimeout(() => { if (rec.state === 'recording') rec.pause(); }, 150);
         mediaRecorderRef.current = rec;
-      } catch (e) { console.warn('Live photo not supported', e); }
+      } catch (e) { console.warn(e); }
     }
 
     runCountdownThenSnap();
@@ -211,7 +206,6 @@ export default function PhotoboothStudio() {
   const runCountdownThenSnap = () => {
     const dur = timerDuration === 0 ? 0 : timerDuration;
 
-    // Resume recording during countdown
     if (mediaRecorderRef.current?.state === 'paused') mediaRecorderRef.current.resume();
 
     if (dur === 0) {
@@ -236,7 +230,6 @@ export default function PhotoboothStudio() {
   const doSnap = async () => {
     flash();
 
-    // Pause recording 400ms after snap to capture the smile moment
     setTimeout(() => {
       if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.pause();
     }, 400);
@@ -246,27 +239,22 @@ export default function PhotoboothStudio() {
 
     const ri = retakeIndexRef.current;
     if (ri !== null) {
-      // Retake single photo
       const updated = [...capturedRef.current];
       updated[ri] = photo;
       capturedRef.current = updated;
       setCapturedPhotos(updated);
       retakeIndexRef.current = null;
       setRetakeIndex(null);
-      // Auto composite!
       finishComposite();
     } else {
-      // Normal sequence
       capturedRef.current.push(photo);
       setCapturedPhotos([...capturedRef.current]);
 
       if (capturedRef.current.length < requiredPhotos) {
-        // Wait 1s then countdown for next photo
         setTimeout(() => {
           runCountdownThenSnap();
         }, 1000);
       } else {
-        // All photos taken — auto composite!
         finishComposite();
       }
     }
@@ -280,7 +268,6 @@ export default function PhotoboothStudio() {
     retakeIndexRef.current = null;
     setRetakeIndex(null);
 
-    // Reset recorder
     if (mediaRecorderRef.current) {
       try { mediaRecorderRef.current.stop(); } catch (_) {}
       mediaRecorderRef.current = null;
@@ -311,7 +298,6 @@ export default function PhotoboothStudio() {
     setFinalVideoUrl(null);
   };
 
-  // ─── Auto-detect transparent slot bounding boxes in template ─────────────
   const detectSlots = (tplImg: HTMLImageElement, numSlots: number) => {
     const tc = document.createElement('canvas');
     tc.width = tplImg.naturalWidth || tplImg.width;
@@ -324,10 +310,9 @@ export default function PhotoboothStudio() {
     try {
       data = tctx.getImageData(0, 0, W, H).data;
     } catch {
-      return []; // CORS error fallback
+      return [];
     }
 
-    // Count % transparent pixels per row
     const rowTrans = new Float32Array(H);
     for (let y = 0; y < H; y++) {
       let cnt = 0;
@@ -337,7 +322,6 @@ export default function PhotoboothStudio() {
       rowTrans[y] = cnt / W;
     }
 
-    // Find contiguous bands of rows with >25% transparency
     const THRESH = 0.25;
     const bands: { y1: number; y2: number }[] = [];
     let inBand = false, start = 0;
@@ -347,7 +331,6 @@ export default function PhotoboothStudio() {
     }
     if (inBand) bands.push({ y1: start, y2: H - 1 });
 
-    // For each band get horizontal extent from the middle row
     const slots = bands
       .map(b => {
         let x1 = W, x2 = 0;
@@ -360,17 +343,15 @@ export default function PhotoboothStudio() {
         }
         return { x: x1, y: b.y1, w: x2 - x1 + 1, h: b.y2 - b.y1 + 1 };
       })
-      .filter(s => s.w > W * 0.1 && s.h > H * 0.04); // ignore tiny artefacts
+      .filter(s => s.w > W * 0.1 && s.h > H * 0.04);
 
-    slots.sort((a, b) => a.y - b.y); // top to bottom
+    slots.sort((a, b) => a.y - b.y);
     return slots;
   };
 
-  // ─── Finish: composite photos + template ─────────────────────────────────
   const finishComposite = async () => {
     setIsProcessing(true);
 
-    // Finalize video
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       if (mediaRecorderRef.current.state === 'paused') mediaRecorderRef.current.resume();
       mediaRecorderRef.current.stop();
@@ -395,17 +376,14 @@ export default function PhotoboothStudio() {
     const ctx = c.getContext('2d', { alpha: true })!;
     ctx.clearRect(0, 0, W, H);
 
-    // ── Builtin slot hints (SVGs cannot be pixel-scanned reliably) ──────────
     const builtinSlots: Record<string, Array<{x:number;y:number;w:number;h:number}>> = {
-      'builtin-1': [{x:100, y:100, w:1000, h:1300}],  // Polaroid
-      'builtin-2': [{x:60,  y:60,  w:1080, h:1660}],  // Neon
-      'builtin-3': [{x:150, y:50,  w:900,  h:1700}],  // Vintage Film
+      'builtin-1': [{x:100, y:100, w:1000, h:1300}],
+      'builtin-2': [{x:60,  y:60,  w:1080, h:1660}],
+      'builtin-3': [{x:150, y:50,  w:900,  h:1700}],
     };
     const builtinHint = selectedTemplate?.id ? builtinSlots[selectedTemplate.id] : undefined;
 
     const photos = capturedRef.current;
-
-    // Auto-detect slot positions — use builtin hint first, then pixel scan
     const slots = builtinHint || detectSlots(tplImg, photos.length);
 
     for (let i = 0; i < photos.length; i++) {
@@ -416,11 +394,9 @@ export default function PhotoboothStudio() {
       let slotX: number, slotY: number, slotW: number, slotH: number;
 
       if (slots.length >= photos.length) {
-        // Use detected slot positions
         const s = slots[i];
         slotX = s.x; slotY = s.y; slotW = s.w; slotH = s.h;
       } else {
-        // Fallback: equal division based on layout
         const layout = selectedTemplate.layout || (selectedTemplate.isCustom ? 'strip-3' : 'single');
         if (layout === 'single') {
           slotX = 0; slotY = 0; slotW = W; slotH = H;
@@ -434,7 +410,6 @@ export default function PhotoboothStudio() {
         }
       }
 
-      // Cover-fit photo into slot
       const slotAspect = slotW / slotH;
       let drawW: number, drawH: number, ox: number, oy: number;
       if (aspect > slotAspect) {
@@ -453,7 +428,6 @@ export default function PhotoboothStudio() {
       ctx.restore();
     }
 
-    // Overlay template on top
     ctx.drawImage(tplImg, 0, 0, W, H);
 
     const finalData = c.toDataURL('image/png');
@@ -467,7 +441,6 @@ export default function PhotoboothStudio() {
     setIsProcessing(false);
   };
 
-  // ─── Reset ────────────────────────────────────────────────────────────────
   const resetAll = () => {
     setFinalImage(null);
     setFinalVideoUrl(null);
@@ -484,7 +457,6 @@ export default function PhotoboothStudio() {
     recordedChunksRef.current = [];
   };
 
-  // ─── Download / Print ─────────────────────────────────────────────────────
   const handleDownload = () => {
     if (viewMode === 'video' && finalVideoUrl) {
       const a = document.createElement('a'); a.href = finalVideoUrl; a.download = `snap-live-${Date.now()}.webm`; a.click();
@@ -534,12 +506,11 @@ export default function PhotoboothStudio() {
       pdf.addImage(finalImage, 'JPEG', x, y, fw, fh, undefined, 'FAST');
       pdf.save(`snapbooth-${Date.now()}.pdf`);
     } catch (err) {
-      console.error('PDF error:', err);
+      console.error(err);
       alert('Gagal membuat PDF.');
     }
   };
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
   const cycleTimer = () => {
     setTimerDuration(t => t === 0 ? 3 : t === 3 ? 10 : 0);
   };
@@ -549,17 +520,14 @@ export default function PhotoboothStudio() {
     ? `Ulang Foto ${retakeIndex + 1} dari ${requiredPhotos}`
     : `Foto ${capturedPhotos.length + 1} dari ${requiredPhotos}`;
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-  return (
+    return (
     <div className="w-full flex-1 min-h-0 flex flex-col items-center bg-[#efefef] p-4 lg:p-8">
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" strategy="lazyOnload" />
 
-      {/* Hidden live recording canvas */}
       <canvas ref={liveCanvasRef} className="hidden" />
 
       <div className="relative w-full max-w-5xl flex-1 bg-white rounded-3xl overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] flex flex-col border border-gray-100">
 
-        {/* ── Top bar ── */}
         <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/60 to-transparent z-40 pointer-events-none flex flex-col sm:flex-row justify-between items-start p-4 sm:p-5 gap-3">
           <span className="text-white/90 font-semibold tracking-tight text-lg drop-shadow-md">SnapBooth</span>
 
@@ -586,13 +554,10 @@ export default function PhotoboothStudio() {
           )}
         </div>
 
-        {/* ── Viewport ── */}
         <div className="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col">
 
-          {/* CAPTURE phase */}
           {appPhase === 'capture' && (
             <>
-              {/* Webcam */}
               <Webcam
                 ref={webcamRef}
                 audio={false}
@@ -602,7 +567,6 @@ export default function PhotoboothStudio() {
                 className={`w-full h-full object-cover ${removeBackground ? 'opacity-0 absolute inset-0' : ''}`}
               />
 
-              {/* AI mask canvas — visible when removeBackground is on */}
               <canvas
                 ref={maskCanvasRef}
                 width={1280}
@@ -610,25 +574,20 @@ export default function PhotoboothStudio() {
                 className={`absolute inset-0 w-full h-full object-cover ${removeBackground ? 'z-10' : 'hidden'}`}
               />
 
-
-              {/* Template frame guide overlay — shows while capturing */}
               {selectedTemplate?.url && (
                 <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={selectedTemplate.url}
                     alt="frame guide"
                     className="absolute inset-0 w-full h-full object-cover opacity-70"
                     style={{ mixBlendMode: 'normal' }}
                   />
-                  {/* Darkened corners to visually indicate the framing area */}
                   <div className="absolute inset-0" style={{
                     background: 'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.25) 100%)'
                   }} />
                 </div>
               )}
 
-              {/* Countdown overlay */}
               {countdown !== null && (
                 <div className="absolute inset-0 z-30 bg-black/30 backdrop-blur-sm flex flex-col items-center justify-center">
                   <div className="text-[11rem] font-bold text-white drop-shadow-lg leading-none">{countdown}</div>
@@ -636,19 +595,15 @@ export default function PhotoboothStudio() {
                 </div>
               )}
 
-              {/* Flash */}
               <div className={`absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-75 ${isFlashing ? 'opacity-100' : 'opacity-0'}`} />
             </>
           )}
 
-          {/* RESULT phase */}
           {appPhase === 'result' && finalImage && (
             <div className="w-full flex-1 min-h-0 bg-gray-50 z-30 flex flex-col p-4 sm:p-6 overflow-y-auto">
-              {/* Main Preview */}
               <div className="flex-1 min-h-0 relative w-full flex items-center justify-center drop-shadow-xl">
                 {viewMode === 'video' && finalVideoUrl
                   ? <video src={finalVideoUrl} autoPlay loop muted playsInline className="max-h-full max-w-full object-contain rounded-xl shadow-lg" />
-                  // eslint-disable-next-line @next/next/no-img-element
                   : <img src={finalImage} alt="Hasil" className="max-h-full max-w-full object-contain rounded-xl shadow-lg" />
                 }
                 {finalVideoUrl && (
@@ -659,13 +614,11 @@ export default function PhotoboothStudio() {
                 )}
               </div>
 
-              {/* Retake Thumbnails */}
               <div className="mt-6 flex flex-col items-center">
                 <p className="text-sm font-semibold text-gray-500 mb-3 text-center">Ada yang kurang pas? Klik foto untuk mengulang</p>
                 <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
                   {capturedPhotos.map((photo, i) => (
                     <button key={i} onClick={() => handleRetakeSingle(i)} className="relative group w-16 h-20 sm:w-20 sm:h-28 rounded-xl overflow-hidden border-2 border-white shadow-md hover:border-black hover:shadow-xl transition-all flex-shrink-0">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={photo} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white">
                         <RotateCcw size={16} />
@@ -679,10 +632,8 @@ export default function PhotoboothStudio() {
           )}
         </div>
 
-        {/* ── Bottom bar ── */}
         <div className="h-auto min-h-[9rem] bg-white border-t border-gray-100 px-4 sm:px-5 py-4 flex flex-col sm:flex-row items-center gap-4 relative z-40">
 
-          {/* Template strip (capture phase) */}
           {appPhase === 'capture' && (
             <div className="w-full sm:flex-1 flex gap-2 overflow-x-auto items-center pb-2 sm:pb-0 pr-0 sm:pr-4 snap-x">
               {activeTemplates.map(tpl => (
@@ -693,7 +644,6 @@ export default function PhotoboothStudio() {
                     ${selectedTemplate?.id === tpl.id ? 'border-black shadow-md' : 'border-gray-200'}`}
                 >
                   {tpl.url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={tpl.url} alt={tpl.name} className="w-full h-full object-contain p-0.5" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Memuat</div>
@@ -708,7 +658,6 @@ export default function PhotoboothStudio() {
             </div>
           )}
 
-          {/* Action buttons */}
           <div className={`flex flex-wrap items-center gap-2 sm:gap-3 ${appPhase === 'capture' ? 'w-full sm:w-auto sm:ml-auto justify-center' : 'w-full justify-center'}`}>
 
             {appPhase === 'capture' && (
@@ -745,7 +694,6 @@ export default function PhotoboothStudio() {
         </div>
       </div>
 
-      {/* QR Modal */}
       {showQR && finalImage && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white p-10 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full relative">
