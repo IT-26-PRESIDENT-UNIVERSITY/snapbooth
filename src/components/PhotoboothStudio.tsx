@@ -551,48 +551,74 @@ export default function PhotoboothStudio() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="w-full flex-1 min-h-0 flex flex-col items-center bg-[#efefef] p-4 lg:p-8">
+    // MAIN WRAPPER: Background hitam di HP, Gradien di Desktop
+    <div className="w-full h-screen flex flex-col lg:flex-row items-center justify-center bg-black lg:bg-gradient-to-br lg:from-[#00205B] lg:via-[#00153D] lg:to-[#8A1538] p-0 lg:p-6 relative overflow-hidden font-sans">
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" strategy="lazyOnload" />
 
       {/* Hidden live recording canvas */}
       <canvas ref={liveCanvasRef} className="hidden" />
 
-      <div className="relative w-full max-w-5xl flex-1 bg-white rounded-3xl overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] flex flex-col border border-gray-100">
+      {/* ── DESKTOP ONLY: IDENTITAS KAMPUS ── */}
+      <div className="hidden lg:flex w-full lg:w-1/3 p-12 flex-col justify-center text-white z-10 text-left">
+        <div className="mb-6">
+          <img src="/logo-presu.png" alt="President University Logo" className="w-32 h-auto drop-shadow-lg" />
+        </div>
+        <h1 className="text-6xl font-extrabold tracking-tight mb-2 drop-shadow-xl">
+          PresUniv<br/><span className="text-[#FDB813]">Booth.</span>
+        </h1>
+        <p className="text-lg text-white/80 drop-shadow mb-0 font-medium">
+          Where Tomorrow's Leaders Make Memories.
+        </p>
+      </div>
 
-        {/* ── Top bar ── */}
-        <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/60 to-transparent z-40 pointer-events-none flex flex-col sm:flex-row justify-between items-start p-4 sm:p-5 gap-3">
-          <span className="text-white/90 font-semibold tracking-tight text-lg drop-shadow-md">SnapBooth</span>
+      {/* ── KOTAK KAMERA UTAMA ── */}
+      {/* Mobile: Fullscreen tanpa batas. Desktop: Kotak dengan border dan shadow */}
+      <div className="relative w-full h-full lg:w-2/3 lg:max-h-[90vh] flex-1 lg:bg-white lg:rounded-3xl overflow-hidden lg:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col lg:border lg:border-white/20 z-10">
+
+        {/* ── MOBILE ONLY: VIGNETTE GRADIENT ── */}
+        {appPhase === 'capture' && (
+          <>
+            {/* Atas: Navy memudar ke bawah */}
+            <div className="lg:hidden absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-[#00205B]/90 via-[#00205B]/40 to-transparent z-20 pointer-events-none" />
+            {/* Bawah: Maroon memudar ke atas */}
+            <div className="lg:hidden absolute bottom-0 inset-x-0 h-64 bg-gradient-to-t from-[#8A1538]/90 via-[#8A1538]/40 to-transparent z-20 pointer-events-none" />
+          </>
+        )}
+
+        {/* ── MOBILE ONLY: FLOATING LOGO ── */}
+        <div className="lg:hidden absolute top-6 left-5 z-40 flex items-center gap-3 pointer-events-none">
+          <img src="/logo-presu.png" alt="Logo" className="w-9 h-auto drop-shadow-lg" />
+          <h1 className="text-xl font-extrabold tracking-tight text-white drop-shadow-md">
+            PresUniv<span className="text-[#FDB813]">.</span>
+          </h1>
+        </div>
+
+        {/* ── TOP BAR (Controls) ── */}
+        <div className="absolute top-0 right-0 lg:inset-x-0 lg:bg-gradient-to-b lg:from-black/80 lg:to-transparent z-40 pointer-events-none flex flex-col lg:flex-row justify-end lg:justify-between items-end lg:items-start p-5 gap-3">
+          <span className="hidden lg:block text-white font-bold tracking-widest text-sm uppercase drop-shadow-md">President University</span>
 
           {appPhase === 'capture' && (
-            <div className="flex flex-wrap gap-2 pointer-events-auto">
-              <button onClick={cycleTimer} className="h-9 px-3 flex items-center gap-1.5 rounded-full bg-black/20 backdrop-blur-md text-white border border-white/20 hover:bg-black/40 text-sm font-medium">
-                <Timer size={14} /> <span className="hidden sm:inline">{timerDuration === 0 ? 'Mati' : `${timerDuration}s`}</span>
-                <span className="sm:hidden">{timerDuration === 0 ? '0s' : `${timerDuration}s`}</span>
+            <div className="flex flex-col lg:flex-row gap-3 pointer-events-auto mt-14 lg:mt-0">
+              <button onClick={cycleTimer} className="h-10 lg:h-9 px-3 flex items-center gap-2 rounded-full bg-black/40 backdrop-blur-md text-white border border-white/30 hover:bg-black/60 shadow-lg text-sm font-medium transition-all">
+                <Timer size={16} /> <span>{timerDuration === 0 ? 'Off' : `${timerDuration}s`}</span>
               </button>
-              <button
-                onClick={() => setLivePhotoEnabled(v => !v)}
-                className={`h-9 px-3 flex items-center gap-1.5 rounded-full backdrop-blur-md text-sm font-medium transition-colors border border-white/20 ${livePhotoEnabled ? 'bg-yellow-400 text-black border-transparent' : 'bg-black/20 text-white hover:bg-black/40'}`}
-              >
-                <Video size={14} /> <span className="hidden sm:inline">{livePhotoEnabled ? 'Live' : 'Live Off'}</span>
+              <button onClick={() => setLivePhotoEnabled(v => !v)} className={`h-10 lg:h-9 px-3 flex items-center gap-2 rounded-full backdrop-blur-md text-sm font-medium transition-all shadow-lg border ${livePhotoEnabled ? 'bg-[#FDB813] text-black border-transparent' : 'bg-black/40 text-white border-white/30 hover:bg-black/60'}`}>
+                <Video size={16} /> <span>{livePhotoEnabled ? 'Live' : 'Off'}</span>
               </button>
-
-              <button
-                onClick={() => setFacingMode(m => m === 'user' ? 'environment' : 'user')}
-                className="w-9 h-9 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-md text-white border border-white/20 hover:bg-black/40"
-              >
-                <RefreshCcw size={16} />
+              <button onClick={() => setFacingMode(m => m === 'user' ? 'environment' : 'user')} className="w-10 h-10 lg:w-9 lg:h-9 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white border border-white/30 hover:bg-black/60 shadow-lg transition-all">
+                <RefreshCcw size={18} />
               </button>
             </div>
           )}
         </div>
 
-        {/* ── Viewport ── */}
-        <div className="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col">
+        {/* ── VIEWPORT (Layar Kamera Utama) ── */}
+        {/* Mobile: Absolute penuhi layar. Desktop: Flex menyesuaikan wadah */}
+        <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 bg-black overflow-hidden flex flex-col z-0 lg:z-10">
 
-          {/* CAPTURE phase */}
+          {/* FASE CAPTURE */}
           {appPhase === 'capture' && (
             <>
-              {/* Webcam */}
               <Webcam
                 ref={webcamRef}
                 audio={false}
@@ -602,7 +628,6 @@ export default function PhotoboothStudio() {
                 className={`w-full h-full object-cover ${removeBackground ? 'opacity-0 absolute inset-0' : ''}`}
               />
 
-              {/* AI mask canvas — visible when removeBackground is on */}
               <canvas
                 ref={maskCanvasRef}
                 width={1280}
@@ -610,64 +635,51 @@ export default function PhotoboothStudio() {
                 className={`absolute inset-0 w-full h-full object-cover ${removeBackground ? 'z-10' : 'hidden'}`}
               />
 
-
-              {/* Template frame guide overlay — shows while capturing */}
               {selectedTemplate?.url && (
                 <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={selectedTemplate.url}
-                    alt="frame guide"
-                    className="absolute inset-0 w-full h-full object-cover opacity-70"
-                    style={{ mixBlendMode: 'normal' }}
-                  />
-                  {/* Darkened corners to visually indicate the framing area */}
-                  <div className="absolute inset-0" style={{
-                    background: 'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.25) 100%)'
-                  }} />
+                  <img src={selectedTemplate.url} alt="frame guide" className="absolute inset-0 w-full h-full object-cover opacity-70" style={{ mixBlendMode: 'normal' }} />
+                  <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.25) 100%)' }} />
                 </div>
               )}
 
-              {/* Countdown overlay */}
               {countdown !== null && (
-                <div className="absolute inset-0 z-30 bg-black/30 backdrop-blur-sm flex flex-col items-center justify-center">
-                  <div className="text-[11rem] font-bold text-white drop-shadow-lg leading-none">{countdown}</div>
-                  <div className="mt-4 bg-black/50 text-white text-sm font-medium px-4 py-1.5 rounded-full">{shotLabel}</div>
+                <div className="absolute inset-0 z-30 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center">
+                  <div className="text-[11rem] font-bold text-white drop-shadow-[0_0_25px_rgba(253,184,19,0.5)] leading-none">{countdown}</div>
+                  <div className="mt-4 bg-[#8A1538] text-white text-sm font-bold px-5 py-2 rounded-full border border-white/20 shadow-lg">{shotLabel}</div>
                 </div>
               )}
 
-              {/* Flash */}
               <div className={`absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-75 ${isFlashing ? 'opacity-100' : 'opacity-0'}`} />
             </>
           )}
 
-          {/* RESULT phase */}
+          {/* FASE RESULT */}
           {appPhase === 'result' && finalImage && (
-            <div className="w-full flex-1 min-h-0 bg-gray-50 z-30 flex flex-col p-4 sm:p-6 overflow-y-auto">
-              {/* Main Preview */}
-              <div className="flex-1 min-h-0 relative w-full flex items-center justify-center drop-shadow-xl">
+            // Mobile: Overlay hitam blur agar fokus ke hasil. Desktop: Abu-abu bersih
+            <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 lg:bg-gray-50 bg-black/95 backdrop-blur-md z-30 flex flex-col p-4 sm:p-6 pb-48 lg:pb-6 overflow-y-auto">
+              <div className="flex-1 min-h-0 relative w-full flex items-center justify-center drop-shadow-xl mt-10 lg:mt-0">
                 {viewMode === 'video' && finalVideoUrl
-                  ? <video src={finalVideoUrl} autoPlay loop muted playsInline className="max-h-full max-w-full object-contain rounded-xl shadow-lg" />
+                  ? <video src={finalVideoUrl} autoPlay loop muted playsInline className="max-h-full max-w-full object-contain rounded-xl shadow-2xl border-4 border-white lg:border-white border-white/20" />
                   // eslint-disable-next-line @next/next/no-img-element
-                  : <img src={finalImage} alt="Hasil" className="max-h-full max-w-full object-contain rounded-xl shadow-lg" />
+                  : <img src={finalImage} alt="Hasil" className="max-h-full max-w-full object-contain rounded-xl shadow-2xl border-4 border-white lg:border-white border-white/20" />
                 }
                 {finalVideoUrl && (
                   <div className="absolute top-3 right-3 flex bg-black/60 backdrop-blur-md rounded-full p-1 shadow-lg">
-                    <button onClick={() => setViewMode('photo')} className={`p-2 rounded-full ${viewMode === 'photo' ? 'bg-white text-black' : 'text-white'}`}><ImageIcon size={14} /></button>
-                    <button onClick={() => setViewMode('video')} className={`p-2 rounded-full ${viewMode === 'video' ? 'bg-white text-black' : 'text-white'}`}><Play size={14} /></button>
+                    <button onClick={() => setViewMode('photo')} className={`p-2 rounded-full transition-colors ${viewMode === 'photo' ? 'bg-[#FDB813] text-black' : 'text-white'}`}><ImageIcon size={14} /></button>
+                    <button onClick={() => setViewMode('video')} className={`p-2 rounded-full transition-colors ${viewMode === 'video' ? 'bg-[#FDB813] text-black' : 'text-white'}`}><Play size={14} /></button>
                   </div>
                 )}
               </div>
 
-              {/* Retake Thumbnails */}
               <div className="mt-6 flex flex-col items-center">
-                <p className="text-sm font-semibold text-gray-500 mb-3 text-center">Ada yang kurang pas? Klik foto untuk mengulang</p>
+                <p className="text-sm font-bold lg:text-[#00205B] text-white/90 mb-3 text-center uppercase tracking-wide">Ada yang kurang pas? Klik foto untuk mengulang</p>
                 <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
                   {capturedPhotos.map((photo, i) => (
-                    <button key={i} onClick={() => handleRetakeSingle(i)} className="relative group w-16 h-20 sm:w-20 sm:h-28 rounded-xl overflow-hidden border-2 border-white shadow-md hover:border-black hover:shadow-xl transition-all flex-shrink-0">
+                    <button key={i} onClick={() => handleRetakeSingle(i)} className="relative group w-16 h-20 sm:w-20 sm:h-28 rounded-xl overflow-hidden border-2 border-white/20 lg:border-gray-200 shadow-md hover:border-[#8A1538] hover:shadow-xl transition-all flex-shrink-0">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={photo} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white">
+                      <div className="absolute inset-0 bg-[#8A1538]/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white backdrop-blur-sm">
                         <RotateCcw size={16} />
                         <span className="text-[10px] font-bold mt-1">Ulang {i + 1}</span>
                       </div>
@@ -679,27 +691,26 @@ export default function PhotoboothStudio() {
           )}
         </div>
 
-        {/* ── Bottom bar ── */}
-        <div className="h-auto min-h-[9rem] bg-white border-t border-gray-100 px-4 sm:px-5 py-4 flex flex-col sm:flex-row items-center gap-4 relative z-40">
-
-          {/* Template strip (capture phase) */}
+        {/* ── BOTTOM BAR (Slogan & Shutter) ── */}
+        <div className="absolute bottom-0 inset-x-0 lg:relative lg:bottom-auto lg:inset-x-auto h-auto min-h-[9rem] lg:bg-white bg-transparent lg:border-t lg:border-gray-100 px-4 sm:px-5 pb-8 pt-4 lg:py-4 flex flex-col sm:flex-row items-center gap-4 z-40 pointer-events-none">
+          
           {appPhase === 'capture' && (
-            <div className="w-full sm:flex-1 flex gap-2 overflow-x-auto items-center pb-2 sm:pb-0 pr-0 sm:pr-4 snap-x">
+            <div className="w-full sm:flex-1 flex gap-2 overflow-x-auto items-center pb-2 sm:pb-0 pr-0 sm:pr-4 snap-x custom-scrollbar pointer-events-auto">
               {activeTemplates.map(tpl => (
                 <button
                   key={tpl.id}
                   onClick={() => setSelectedTemplate(tpl)}
                   className={`relative flex-shrink-0 w-14 h-20 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 snap-center
-                    ${selectedTemplate?.id === tpl.id ? 'border-black shadow-md' : 'border-gray-200'}`}
+                    ${selectedTemplate?.id === tpl.id ? 'border-[#8A1538] shadow-[0_0_15px_rgba(138,21,56,0.8)] lg:shadow-[0_0_10px_rgba(138,21,56,0.3)]' : 'border-white/40 lg:border-gray-200'}`}
                 >
                   {tpl.url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={tpl.url} alt={tpl.name} className="w-full h-full object-contain p-0.5" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Memuat</div>
+                    <div className="w-full h-full flex items-center justify-center text-xs text-white/50 lg:text-gray-400">Wait</div>
                   )}
                   {selectedTemplate?.id === tpl.id && (
-                    <div className="absolute top-1 right-1 w-4 h-4 bg-black rounded-full flex items-center justify-center">
+                    <div className="absolute top-1 right-1 w-4 h-4 bg-[#8A1538] rounded-full flex items-center justify-center shadow-md">
                       <Check size={9} color="white" strokeWidth={3} />
                     </div>
                   )}
@@ -708,36 +719,36 @@ export default function PhotoboothStudio() {
             </div>
           )}
 
-          {/* Action buttons */}
-          <div className={`flex flex-wrap items-center gap-2 sm:gap-3 ${appPhase === 'capture' ? 'w-full sm:w-auto sm:ml-auto justify-center' : 'w-full justify-center'}`}>
-
+          <div className={`flex flex-col lg:flex-row items-center gap-2 sm:gap-3 pointer-events-auto ${appPhase === 'capture' ? 'w-full sm:w-auto sm:ml-auto' : 'w-full justify-center flex-wrap flex-row'}`}>
+            
             {appPhase === 'capture' && (
-              <button
-                onClick={handleShutter}
-                disabled={isProcessing || countdown !== null}
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-[5px] border-gray-200 bg-white shadow flex items-center justify-center disabled:opacity-40 hover:border-gray-300 transition-colors flex-shrink-0"
-              >
-                <div className="w-[44px] h-[44px] sm:w-[56px] sm:h-[56px] rounded-full bg-black hover:scale-95 transition-transform" />
-              </button>
+              <div className="flex flex-col items-center">
+                {/* SLOGAN MELAYANG KHUSUS HP */}
+                <p className="lg:hidden text-white/90 text-[10px] font-bold tracking-widest drop-shadow-md mb-3 text-center pointer-events-none">
+                  WHERE TOMORROW'S LEADERS MAKE MEMORIES.
+                </p>
+
+                <button onClick={handleShutter} disabled={isProcessing || countdown !== null} className="w-16 h-16 lg:w-20 lg:h-20 rounded-full border-[5px] border-white/80 lg:border-gray-200 bg-white/20 lg:bg-white shadow-xl flex items-center justify-center disabled:opacity-40 hover:border-[#FDB813] lg:hover:border-[#8A1538] transition-colors flex-shrink-0 group backdrop-blur-sm lg:backdrop-blur-none">
+                  <div className="w-[46px] h-[46px] lg:w-[56px] lg:h-[56px] rounded-full bg-gradient-to-br from-[#8A1538] to-[#600e26] group-hover:scale-95 transition-transform shadow-inner" />
+                </button>
+              </div>
             )}
 
             {appPhase === 'result' && (
               <>
-                <button onClick={resetAll} className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 flex-shrink-0" title="Batal & Mulai Baru">
+                <button onClick={resetAll} className="w-10 h-10 sm:w-12 sm:h-12 rounded-full lg:bg-gray-100 bg-white/20 backdrop-blur-md lg:hover:bg-gray-200 flex items-center justify-center lg:text-gray-600 text-white flex-shrink-0 transition-colors shadow-lg lg:shadow-none">
                   <X size={18} />
                 </button>
-                <button onClick={handleRetakeAll} disabled={isProcessing} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 flex items-center gap-1.5 text-xs sm:text-sm font-semibold transition-colors flex-shrink-0">
+                <button onClick={handleRetakeAll} disabled={isProcessing} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-red-50 bg-red-500/20 backdrop-blur-md lg:text-[#8A1538] text-red-100 lg:hover:bg-red-100 hover:bg-red-500/40 flex items-center gap-1.5 text-xs sm:text-sm font-bold transition-colors flex-shrink-0 border border-transparent lg:border-none border-red-400/30">
                   <RotateCcw size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Ulangi Semua</span>
                   <span className="sm:hidden">Ulang Semua</span>
                 </button>
-                <button onClick={handleDownload} className="btn-primary h-10 sm:h-12 px-4 sm:px-6 rounded-full flex items-center gap-1.5 text-xs sm:text-sm font-semibold shadow flex-shrink-0">
+                {/* Tombol Simpan pakai warna kuning biar kontras di background hitam HP */}
+                <button onClick={handleDownload} className="lg:bg-[#00205B] bg-[#FDB813] lg:hover:bg-[#00153D] hover:bg-[#e0a210] lg:text-white text-[#00205B] h-10 sm:h-12 px-4 sm:px-6 rounded-full flex items-center gap-1.5 text-xs sm:text-sm font-extrabold shadow-xl flex-shrink-0 transition-colors">
                   <Download size={14} className="sm:w-4 sm:h-4" /> Simpan {viewMode === 'video' && finalVideoUrl ? 'Video' : 'Foto'}
                 </button>
-                <button onClick={() => setShowQR(true)} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center gap-1.5 text-xs sm:text-sm font-medium flex-shrink-0">
+                <button onClick={() => setShowQR(true)} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-gray-100 bg-white/20 backdrop-blur-md lg:hover:bg-gray-200 flex items-center gap-1.5 text-xs sm:text-sm font-bold lg:text-[#00205B] text-white flex-shrink-0 transition-colors border border-transparent lg:border-none border-white/30 shadow-lg lg:shadow-none">
                   <QrCode size={14} className="sm:w-4 sm:h-4" /> QR
-                </button>
-                <button onClick={handlePDF} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center gap-1.5 text-xs sm:text-sm font-medium flex-shrink-0">
-                  <Printer size={14} className="sm:w-4 sm:h-4" /> PDF
                 </button>
               </>
             )}
@@ -745,21 +756,23 @@ export default function PhotoboothStudio() {
         </div>
       </div>
 
-      {/* QR Modal */}
+      {/* QR Modal (Tidak berubah) */}
       {showQR && finalImage && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 lg:bg-[#00205B]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          {/* ... Modal content ... */}
           <div className="bg-white p-10 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full relative">
-            <button onClick={() => setShowQR(false)} className="absolute top-5 right-5 w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center">
+            <button onClick={() => setShowQR(false)} className="absolute top-5 right-5 w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-500">
               <X size={18} />
             </button>
-            <h3 className="text-xl font-bold mb-6">Scan & Download</h3>
+            <h3 className="text-xl font-extrabold text-[#00205B] mb-6">Scan & Download</h3>
             <div className="p-3 bg-white border border-gray-200 rounded-2xl shadow-sm mb-6">
-              <QRCodeSVG value={`${hostUrl}/d/${downloadId}`} size={200} />
+              <QRCodeSVG value={`${hostUrl}/d/${downloadId}`} size={200} fgColor="#00205B" />
             </div>
-            <p className="text-xs text-center text-gray-500 leading-relaxed">Scan kode QR dengan kamera HP Anda untuk mengunduh foto.</p>
+            <p className="text-xs text-center text-gray-500 font-medium leading-relaxed">Scan kode QR dengan kamera HP Anda untuk mengunduh foto ke device masing-masing.</p>
           </div>
         </div>
       )}
     </div>
   );
 }
+
