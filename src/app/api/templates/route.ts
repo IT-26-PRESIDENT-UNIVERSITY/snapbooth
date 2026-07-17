@@ -29,7 +29,7 @@ export async function GET() {
     return NextResponse.json(meta);
   } catch (error) {
     console.error('Failed to get templates from Netlify Blobs:', error);
-    return NextResponse.json(defaultTemplates, { status: 500 });
+    return NextResponse.json(defaultTemplates, { status: 200 });
   }
 }
 
