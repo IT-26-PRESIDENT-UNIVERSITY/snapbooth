@@ -199,8 +199,7 @@ export default function PhotoboothStudio() {
         const stream = (liveCanvasRef.current as any).captureStream(30);
         const rec = new MediaRecorder(stream, { mimeType: 'video/webm' });
         rec.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data); };
-        rec.start(100);
-        setTimeout(() => { if (rec.state === 'recording') rec.pause(); }, 150);
+        rec.start(500); // collect data every 500ms for smooth recording
         mediaRecorderRef.current = rec;
       } catch (e) { console.warn('Live photo not supported', e); }
     }
@@ -210,9 +209,6 @@ export default function PhotoboothStudio() {
 
   const runCountdownThenSnap = () => {
     const dur = timerDuration === 0 ? 0 : timerDuration;
-
-    // Resume recording during countdown
-    if (mediaRecorderRef.current?.state === 'paused') mediaRecorderRef.current.resume();
 
     if (dur === 0) {
       doSnap();
@@ -236,13 +232,8 @@ export default function PhotoboothStudio() {
   const doSnap = async () => {
     flash();
 
-    // Pause recording 400ms after snap to capture the smile moment
-    setTimeout(() => {
-      if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.pause();
-    }, 400);
-
     const photo = await grabFrame();
-    if (!photo) return;
+    if (!photo) { setIsProcessing(false); return; }
 
     const ri = retakeIndexRef.current;
     if (ri !== null) {
@@ -625,9 +616,6 @@ export default function PhotoboothStudio() {
               <button onClick={cycleTimer} className="h-10 lg:h-9 px-3 flex items-center gap-2 rounded-full bg-black/40 backdrop-blur-md text-white border border-white/30 hover:bg-black/60 shadow-lg text-sm font-medium transition-all">
                 <Timer size={16} /> <span>{timerDuration === 0 ? 'Off' : `${timerDuration}s`}</span>
               </button>
-              <button onClick={() => setLivePhotoEnabled(v => !v)} className={`h-10 lg:h-9 px-3 flex items-center gap-2 rounded-full backdrop-blur-md text-sm font-medium transition-all shadow-lg border ${livePhotoEnabled ? 'bg-[#FDB813] text-black border-transparent' : 'bg-black/40 text-white border-white/30 hover:bg-black/60'}`}>
-                <Video size={16} /> <span>{livePhotoEnabled ? 'Live' : 'Off'}</span>
-              </button>
               <button onClick={() => setFacingMode(m => m === 'user' ? 'environment' : 'user')} className="w-10 h-10 lg:w-9 lg:h-9 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white border border-white/30 hover:bg-black/60 shadow-lg transition-all">
                 <RefreshCcw size={18} />
               </button>
@@ -759,16 +747,12 @@ export default function PhotoboothStudio() {
 
             {appPhase === 'result' && (
               <>
-                <button onClick={resetAll} className="w-10 h-10 sm:w-12 sm:h-12 rounded-full lg:bg-gray-100 bg-white/20 backdrop-blur-md lg:hover:bg-gray-200 flex items-center justify-center lg:text-gray-600 text-white flex-shrink-0 transition-colors shadow-lg lg:shadow-none">
-                  <X size={18} />
-                </button>
                 <button onClick={handleRetakeAll} disabled={isProcessing} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-red-50 bg-red-500/20 backdrop-blur-md lg:text-[#8A1538] text-red-100 lg:hover:bg-red-100 hover:bg-red-500/40 flex items-center gap-1.5 text-xs sm:text-sm font-bold transition-colors flex-shrink-0 border border-transparent lg:border-none border-red-400/30">
                   <RotateCcw size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Ulangi Semua</span>
                   <span className="sm:hidden">Ulang Semua</span>
                 </button>
-                {/* Tombol Simpan pakai warna kuning biar kontras di background hitam HP */}
                 <button onClick={handleDownload} className="lg:bg-[#00205B] bg-[#FDB813] lg:hover:bg-[#00153D] hover:bg-[#e0a210] lg:text-white text-[#00205B] h-10 sm:h-12 px-4 sm:px-6 rounded-full flex items-center gap-1.5 text-xs sm:text-sm font-extrabold shadow-xl flex-shrink-0 transition-colors">
-                  <Download size={14} className="sm:w-4 sm:h-4" /> Simpan {viewMode === 'video' && finalVideoUrl ? 'Video' : 'Foto'}
+                  <Download size={14} className="sm:w-4 sm:h-4" /> Simpan Foto
                 </button>
                 <button onClick={() => setShowQR(true)} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-gray-100 bg-white/20 backdrop-blur-md lg:hover:bg-gray-200 flex items-center gap-1.5 text-xs sm:text-sm font-bold lg:text-[#00205B] text-white flex-shrink-0 transition-colors border border-transparent lg:border-none border-white/30 shadow-lg lg:shadow-none">
                   <QrCode size={14} className="sm:w-4 sm:h-4" /> QR
@@ -789,7 +773,7 @@ export default function PhotoboothStudio() {
             </button>
             <h3 className="text-xl font-extrabold text-[#00205B] mb-6">Scan & Download</h3>
             <div className="p-3 bg-white border border-gray-200 rounded-2xl shadow-sm mb-6">
-              <QRCodeSVG value={`${hostUrl}/d/${downloadId}`} size={200} fgColor="#00205B" />
+              <QRCodeSVG value={`${hostUrl}/snapbooth/d?id=${downloadId}`} size={200} fgColor="#00205B" />
             </div>
             <p className="text-xs text-center text-gray-500 font-medium leading-relaxed">Scan kode QR dengan kamera HP Anda untuk mengunduh foto ke device masing-masing.</p>
           </div>
