@@ -456,6 +456,29 @@ export default function PhotoboothStudio() {
     // Overlay template on top
     ctx.drawImage(tplImg, 0, 0, W, H);
 
+    // Overlay watermark logo
+    try {
+      const logoImg = new Image();
+      logoImg.crossOrigin = 'anonymous';
+      await new Promise((resolve, reject) => {
+        logoImg.onload = resolve;
+        logoImg.onerror = reject;
+        logoImg.src = '/logo-presu.png';
+      });
+      
+      const wmWidth = W * 0.15;
+      const wmHeight = (logoImg.height / logoImg.width) * wmWidth;
+      const padding = W * 0.03;
+      const wmX = W - wmWidth - padding;
+      const wmY = H - wmHeight - padding;
+      
+      ctx.globalAlpha = 0.8;
+      ctx.drawImage(logoImg, wmX, wmY, wmWidth, wmHeight);
+      ctx.globalAlpha = 1.0;
+    } catch (err) {
+      console.warn('Failed to load watermark logo', err);
+    }
+
     const finalData = c.toDataURL('image/png');
     setFinalImage(finalData);
 
