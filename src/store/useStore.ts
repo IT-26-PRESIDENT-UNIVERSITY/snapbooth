@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 
 export type PhotoFormat = 'single' | 'strip2' | 'strip4';
 export type TemplateLayout = 'single' | 'strip-3' | 'grid-4';
@@ -13,9 +13,9 @@ export interface Template {
 }
 
 const defaultTemplates: Template[] = [
-  { id: 'builtin-1', name: 'Polaroid Classic', url: '/templates/polaroid.svg', isCustom: false, active: true, layout: 'single' },
-  { id: 'builtin-2', name: 'Neon Cyberpunk', url: '/templates/neon.svg', isCustom: false, active: true, layout: 'single' },
-  { id: 'builtin-3', name: 'Vintage Film', url: '/templates/vintage.svg', isCustom: false, active: true, layout: 'single' },
+  { id: 'builtin-1', name: 'Polaroid Classic', url: '/snapbooth/templates/polaroid.svg', isCustom: false, active: true, layout: 'single' },
+  { id: 'builtin-2', name: 'Neon Cyberpunk', url: '/snapbooth/templates/neon.svg', isCustom: false, active: true, layout: 'single' },
+  { id: 'builtin-3', name: 'Vintage Film', url: '/snapbooth/templates/vintage.svg', isCustom: false, active: true, layout: 'single' },
 ];
 
 interface PhotoboothState {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRef, useState, useEffect } from 'react';
 import Webcam from 'react-webcam';
@@ -48,11 +48,11 @@ export default function PhotoboothStudio() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'photo' | 'video'>('photo');
 
-  // MediaRecorder refs — use refs not state to avoid stale closure
+  // MediaRecorder refs â€” use refs not state to avoid stale closure
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
-  // ─── Auto-select first template ───────────────────────────────────────────
+  // â”€â”€â”€ Auto-select first template â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const active = templates.filter(t => t.active);
     if (!selectedTemplate && active.length > 0) {
@@ -64,14 +64,14 @@ export default function PhotoboothStudio() {
     if (typeof window !== 'undefined') setHostUrl(window.location.origin);
   }, []);
 
-  // ─── Required photos based on template layout ──────────────────────────────
+  // â”€â”€â”€ Required photos based on template layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const requiredPhotos =
     selectedTemplate?.layout === 'single' ? 1
     : selectedTemplate?.layout === 'strip-3' ? 3
     : selectedTemplate?.layout === 'grid-4' ? 4
     : (selectedTemplate?.isCustom ? 3 : 1);   // custom with no layout defaults to 3
 
-  // ─── AI Segmentation loop ─────────────────────────────────────────────────
+  // â”€â”€â”€ AI Segmentation loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!removeBackground) return;
     let running = true;
@@ -114,7 +114,7 @@ export default function PhotoboothStudio() {
     return () => { running = false; seg?.close(); };
   }, [removeBackground]);
 
-  // ─── Live Photo canvas loop (runs always in background) ───────────────────
+  // â”€â”€â”€ Live Photo canvas loop (runs always in background) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     let running = true;
     let raf: number;
@@ -161,7 +161,7 @@ export default function PhotoboothStudio() {
     return () => { running = false; cancelAnimationFrame(raf); };
   }, [removeBackground]);
 
-  // ─── Capture helpers ──────────────────────────────────────────────────────
+  // â”€â”€â”€ Capture helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const grabFrame = async (): Promise<string | null> => {
     if (removeBackground && maskCanvasRef.current) {
       return maskCanvasRef.current.toDataURL('image/png');
@@ -184,7 +184,7 @@ export default function PhotoboothStudio() {
     setTimeout(() => setIsFlashing(false), 120);
   };
 
-  // ─── Start / Snap sequence ────────────────────────────────────────────────
+  // â”€â”€â”€ Start / Snap sequence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Using refs to avoid stale closure problems inside setInterval
   const capturedRef = useRef<string[]>([]);
   const retakeIndexRef = useRef<number | null>(null);
@@ -266,7 +266,7 @@ export default function PhotoboothStudio() {
           runCountdownThenSnap();
         }, 1000);
       } else {
-        // All photos taken — auto composite!
+        // All photos taken â€” auto composite!
         finishComposite();
       }
     }
@@ -311,7 +311,7 @@ export default function PhotoboothStudio() {
     setFinalVideoUrl(null);
   };
 
-  // ─── Auto-detect transparent slot bounding boxes in template ─────────────
+  // â”€â”€â”€ Auto-detect transparent slot bounding boxes in template â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const detectSlots = (tplImg: HTMLImageElement, numSlots: number) => {
     const tc = document.createElement('canvas');
     tc.width = tplImg.naturalWidth || tplImg.width;
@@ -366,7 +366,7 @@ export default function PhotoboothStudio() {
     return slots;
   };
 
-  // ─── Finish: composite photos + template ─────────────────────────────────
+  // â”€â”€â”€ Finish: composite photos + template â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const finishComposite = async () => {
     setIsProcessing(true);
 
@@ -395,7 +395,7 @@ export default function PhotoboothStudio() {
     const ctx = c.getContext('2d', { alpha: true })!;
     ctx.clearRect(0, 0, W, H);
 
-    // ── Builtin slot hints (SVGs cannot be pixel-scanned reliably) ──────────
+    // â”€â”€ Builtin slot hints (SVGs cannot be pixel-scanned reliably) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const builtinSlots: Record<string, Array<{x:number;y:number;w:number;h:number}>> = {
       'builtin-1': [{x:100, y:100, w:1000, h:1300}],  // Polaroid
       'builtin-2': [{x:60,  y:60,  w:1080, h:1660}],  // Neon
@@ -405,7 +405,7 @@ export default function PhotoboothStudio() {
 
     const photos = capturedRef.current;
 
-    // Auto-detect slot positions — use builtin hint first, then pixel scan
+    // Auto-detect slot positions â€” use builtin hint first, then pixel scan
     const slots = builtinHint || detectSlots(tplImg, photos.length);
 
     for (let i = 0; i < photos.length; i++) {
@@ -463,7 +463,7 @@ export default function PhotoboothStudio() {
       await new Promise((resolve, reject) => {
         logoImg.onload = resolve;
         logoImg.onerror = reject;
-        logoImg.src = '/logo-presu.png';
+        logoImg.src = '/snapbooth/logo-presu.png';
       });
       
       const wmWidth = W * 0.15;
@@ -490,7 +490,7 @@ export default function PhotoboothStudio() {
     setIsProcessing(false);
   };
 
-  // ─── Reset ────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const resetAll = () => {
     setFinalImage(null);
     setFinalVideoUrl(null);
@@ -507,7 +507,7 @@ export default function PhotoboothStudio() {
     recordedChunksRef.current = [];
   };
 
-  // ─── Download / Print ─────────────────────────────────────────────────────
+  // â”€â”€â”€ Download / Print â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleDownload = () => {
     if (viewMode === 'video' && finalVideoUrl) {
       const a = document.createElement('a'); a.href = finalVideoUrl; a.download = `snap-live-${Date.now()}.webm`; a.click();
@@ -562,7 +562,7 @@ export default function PhotoboothStudio() {
     }
   };
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const cycleTimer = () => {
     setTimerDuration(t => t === 0 ? 3 : t === 3 ? 10 : 0);
   };
@@ -572,7 +572,7 @@ export default function PhotoboothStudio() {
     ? `Ulang Foto ${retakeIndex + 1} dari ${requiredPhotos}`
     : `Foto ${capturedPhotos.length + 1} dari ${requiredPhotos}`;
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     // MAIN WRAPPER: Background hitam di HP, Gradien di Desktop
     <div className="w-full h-screen flex flex-col lg:flex-row items-center justify-center bg-black lg:bg-gradient-to-br lg:from-[#00205B] lg:via-[#00153D] lg:to-[#8A1538] p-0 lg:p-6 relative overflow-hidden font-sans">
@@ -581,10 +581,10 @@ export default function PhotoboothStudio() {
       {/* Hidden live recording canvas */}
       <canvas ref={liveCanvasRef} className="hidden" />
 
-      {/* ── DESKTOP ONLY: IDENTITAS KAMPUS ── */}
+      {/* â”€â”€ DESKTOP ONLY: IDENTITAS KAMPUS â”€â”€ */}
       <div className="hidden lg:flex w-full lg:w-1/3 p-12 flex-col justify-center text-white z-10 text-left">
         <div className="mb-6">
-          <img src="/logo-presu.png" alt="President University Logo" className="w-32 h-auto drop-shadow-lg" />
+          <img src="/snapbooth/logo-presu.png" alt="President University Logo" className="w-32 h-auto drop-shadow-lg" />
         </div>
         <h1 className="text-6xl font-extrabold tracking-tight mb-2 drop-shadow-xl">
           PresUniv<br/><span className="text-[#FDB813]">Booth.</span>
@@ -594,11 +594,11 @@ export default function PhotoboothStudio() {
         </p>
       </div>
 
-      {/* ── KOTAK KAMERA UTAMA ── */}
+      {/* â”€â”€ KOTAK KAMERA UTAMA â”€â”€ */}
       {/* Mobile: Fullscreen tanpa batas. Desktop: Kotak dengan border dan shadow */}
       <div className="relative w-full h-full lg:w-2/3 lg:max-h-[90vh] flex-1 lg:bg-white lg:rounded-3xl overflow-hidden lg:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col lg:border lg:border-white/20 z-10">
 
-        {/* ── MOBILE ONLY: VIGNETTE GRADIENT ── */}
+        {/* â”€â”€ MOBILE ONLY: VIGNETTE GRADIENT â”€â”€ */}
         {appPhase === 'capture' && (
           <>
             {/* Atas: Navy memudar ke bawah */}
@@ -608,15 +608,15 @@ export default function PhotoboothStudio() {
           </>
         )}
 
-        {/* ── MOBILE ONLY: FLOATING LOGO ── */}
+        {/* â”€â”€ MOBILE ONLY: FLOATING LOGO â”€â”€ */}
         <div className="lg:hidden absolute top-6 left-5 z-40 flex items-center gap-3 pointer-events-none">
-          <img src="/logo-presu.png" alt="Logo" className="w-9 h-auto drop-shadow-lg" />
+          <img src="/snapbooth/logo-presu.png" alt="Logo" className="w-9 h-auto drop-shadow-lg" />
           <h1 className="text-xl font-extrabold tracking-tight text-white drop-shadow-md">
             PresUniv<span className="text-[#FDB813]">.</span>
           </h1>
         </div>
 
-        {/* ── TOP BAR (Controls) ── */}
+        {/* â”€â”€ TOP BAR (Controls) â”€â”€ */}
         <div className="absolute top-0 right-0 lg:inset-x-0 lg:bg-gradient-to-b lg:from-black/80 lg:to-transparent z-40 pointer-events-none flex flex-col lg:flex-row justify-end lg:justify-between items-end lg:items-start p-5 gap-3">
           <span className="hidden lg:block text-white font-bold tracking-widest text-sm uppercase drop-shadow-md">President University</span>
 
@@ -635,7 +635,7 @@ export default function PhotoboothStudio() {
           )}
         </div>
 
-        {/* ── VIEWPORT (Layar Kamera Utama) ── */}
+        {/* â”€â”€ VIEWPORT (Layar Kamera Utama) â”€â”€ */}
         {/* Mobile: Absolute penuhi layar. Desktop: Flex menyesuaikan wadah */}
         <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 bg-black overflow-hidden flex flex-col z-0 lg:z-10">
 
@@ -714,7 +714,7 @@ export default function PhotoboothStudio() {
           )}
         </div>
 
-        {/* ── BOTTOM BAR (Slogan & Shutter) ── */}
+        {/* â”€â”€ BOTTOM BAR (Slogan & Shutter) â”€â”€ */}
         <div className="absolute bottom-0 inset-x-0 lg:relative lg:bottom-auto lg:inset-x-auto h-auto min-h-[9rem] lg:bg-white bg-transparent lg:border-t lg:border-gray-100 px-4 sm:px-5 pb-8 pt-4 lg:py-4 flex flex-col sm:flex-row items-center gap-4 z-40 pointer-events-none">
           
           {appPhase === 'capture' && (
