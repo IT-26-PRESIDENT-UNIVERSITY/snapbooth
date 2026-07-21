@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useRef, useState, useEffect } from 'react';
 import Webcam from 'react-webcam';
@@ -484,7 +484,7 @@ export default function PhotoboothStudio() {
 
     const id = Math.random().toString(36).slice(2, 10);
     setDownloadId(id);
-    try { localStorage.setItem(`snapbooth_photo_${id}`, finalData); } catch (_) {}
+    try { localStorage.setItem(`presuniv_booth_photo_${id}`, finalData); } catch (_) {}
 
     setAppPhase('result');
     setIsProcessing(false);
@@ -510,9 +510,9 @@ export default function PhotoboothStudio() {
   // â”€â”€â”€ Download / Print â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleDownload = () => {
     if (viewMode === 'video' && finalVideoUrl) {
-      const a = document.createElement('a'); a.href = finalVideoUrl; a.download = `snap-live-${Date.now()}.webm`; a.click();
+      const a = document.createElement('a'); a.href = finalVideoUrl; a.download = `PresUniv-Booth-Live-${Date.now()}.webm`; a.click();
     } else if (finalImage) {
-      const a = document.createElement('a'); a.href = finalImage; a.download = `snap-${Date.now()}.jpg`; a.click();
+      const a = document.createElement('a'); a.href = finalImage; a.download = `PresUniv-Booth-${Date.now()}.jpg`; a.click();
     }
   };
 
@@ -555,7 +555,7 @@ export default function PhotoboothStudio() {
       const y = (ph - fh) / 2;
 
       pdf.addImage(finalImage, 'JPEG', x, y, fw, fh, undefined, 'FAST');
-      pdf.save(`snapbooth-${Date.now()}.pdf`);
+      pdf.save(`PresUniv-Booth-${Date.now()}.pdf`);
     } catch (err) {
       console.error('PDF error:', err);
       alert('Gagal membuat PDF.');

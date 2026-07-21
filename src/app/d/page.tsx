@@ -23,7 +23,7 @@ export default function DownloadPage() {
     setId(paramId);
 
     // Attempt to load from localStorage (Simulating backend retrieval)
-    const data = localStorage.getItem(`snapbooth_photo_${paramId}`);
+    const data = localStorage.getItem(`presuniv_booth_photo_${paramId}`);
 
     
     if (data) {
@@ -39,7 +39,7 @@ export default function DownloadPage() {
     if (!photoUrl) return;
     const a = document.createElement('a');
     a.href = photoUrl;
-    a.download = `snapbooth-${Date.now()}.jpg`;
+    a.download = `PresUniv-Booth-${Date.now()}.jpg`;
     a.click();
   };
 
