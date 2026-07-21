@@ -145,9 +145,9 @@ export default function AdminPage() {
       try {
         await saveCustomTemplate(newTemplate);
         await fetchGlobalTemplates();
-      } catch (err) {
+      } catch (err: any) {
         console.error('Upload failed', err);
-        setError('Gagal menyimpan template. Pastikan penyimpanan browser tidak penuh.');
+        setError(`Gagal menyimpan template: ${err?.message || err}`);
       } finally {
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
