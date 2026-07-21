@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getAllCustomTemplates } from '@/lib/templateDB';
 
 export type PhotoFormat = 'single' | 'strip2' | 'strip4';
 export type TemplateLayout = 'single' | 'strip-3' | 'grid-4';
@@ -48,9 +49,8 @@ export const useStore = create<PhotoboothState>()((set, get) => ({
   setTemplates: (templates) => set({ templates }),
   
   fetchGlobalTemplates: async () => {
-    // Load custom templates from localStorage (static site — no API)
-    const stored = localStorage.getItem('presuniv_custom_templates');
-    const customTemplates: Template[] = stored ? JSON.parse(stored) : [];
+    // Load custom templates from IndexedDB (supports large files)
+    const customTemplates = await getAllCustomTemplates();
     set({ templates: [...defaultTemplates, ...customTemplates] });
   },
 

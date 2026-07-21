@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { Trash2, Upload, Plus, AlertCircle, ArrowLeft, Lock } from 'lucide-react';
 import Link from 'next/link';
+import { saveCustomTemplate, deleteCustomTemplate, updateCustomTemplate } from '@/lib/templateDB';
 
 export default function AdminPage() {
   const { templates, fetchGlobalTemplates } = useStore();
@@ -142,10 +143,7 @@ export default function AdminPage() {
       };
 
       try {
-        const stored = localStorage.getItem('presuniv_custom_templates');
-        const existing = stored ? JSON.parse(stored) : [];
-        existing.push(newTemplate);
-        localStorage.setItem('presuniv_custom_templates', JSON.stringify(existing));
+        await saveCustomTemplate(newTemplate);
         await fetchGlobalTemplates();
       } catch (err) {
         console.error('Upload failed', err);
@@ -165,10 +163,7 @@ export default function AdminPage() {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Hapus template ${name}?`)) return;
     try {
-      const stored = localStorage.getItem('presuniv_custom_templates');
-      const existing = stored ? JSON.parse(stored) : [];
-      const filtered = existing.filter((t: any) => t.id !== id);
-      localStorage.setItem('presuniv_custom_templates', JSON.stringify(filtered));
+      await deleteCustomTemplate(id);
       await fetchGlobalTemplates();
     } catch (err) {
       alert('Gagal menghapus template');
@@ -177,10 +172,7 @@ export default function AdminPage() {
 
   const handleToggle = async (id: string, active: boolean) => {
     try {
-      const stored = localStorage.getItem('presuniv_custom_templates');
-      const existing = stored ? JSON.parse(stored) : [];
-      const updated = existing.map((t: any) => t.id === id ? { ...t, active } : t);
-      localStorage.setItem('presuniv_custom_templates', JSON.stringify(updated));
+      await updateCustomTemplate(id, { active });
       await fetchGlobalTemplates();
     } catch (err) {
       alert('Gagal mengubah status');
