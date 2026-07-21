@@ -454,7 +454,7 @@ export default function PhotoboothStudio() {
       await new Promise((resolve, reject) => {
         logoImg.onload = resolve;
         logoImg.onerror = reject;
-        logoImg.src = '/snapbooth/logo-presu.png';
+        logoImg.src = '/President_University_Logo.png';
       });
       
       const wmWidth = W * 0.15;
@@ -575,7 +575,7 @@ export default function PhotoboothStudio() {
       {/* â”€â”€ DESKTOP ONLY: IDENTITAS KAMPUS â”€â”€ */}
       <div className="hidden lg:flex w-full lg:w-1/3 p-12 flex-col justify-center text-white z-10 text-left">
         <div className="mb-6">
-          <img src="/snapbooth/logo-presu.png" alt="President University Logo" className="w-32 h-auto drop-shadow-lg" />
+          <img src="/President_University_Logo.png" alt="President University Logo" className="w-32 h-auto drop-shadow-lg" />
         </div>
         <h1 className="text-6xl font-extrabold tracking-tight mb-2 drop-shadow-xl">
           PresUniv<br/><span className="text-[#FDB813]">Booth.</span>
@@ -599,15 +599,15 @@ export default function PhotoboothStudio() {
           </>
         )}
 
-        {/* â”€â”€ MOBILE ONLY: FLOATING LOGO â”€â”€ */}
+        {/* ——— MOBILE ONLY: FLOATING LOGO ——— */}
         <div className="lg:hidden absolute top-6 left-5 z-40 flex items-center gap-3 pointer-events-none">
-          <img src="/snapbooth/logo-presu.png" alt="Logo" className="w-9 h-auto drop-shadow-lg" />
+          <img src="/President_University_Logo.png" alt="Logo" className="w-9 h-auto drop-shadow-lg" />
           <h1 className="text-xl font-extrabold tracking-tight text-white drop-shadow-md">
             PresUniv<span className="text-[#FDB813]">.</span>
           </h1>
         </div>
 
-        {/* â”€â”€ TOP BAR (Controls) â”€â”€ */}
+        {/* ——— TOP BAR (Controls) ——— */}
         <div className="absolute top-0 right-0 lg:inset-x-0 lg:bg-gradient-to-b lg:from-black/80 lg:to-transparent z-40 pointer-events-none flex flex-col lg:flex-row justify-end lg:justify-between items-end lg:items-start p-5 gap-3">
           <span className="hidden lg:block text-white font-bold tracking-widest text-sm uppercase drop-shadow-md">President University</span>
 
@@ -773,7 +773,7 @@ export default function PhotoboothStudio() {
             </button>
             <h3 className="text-xl font-extrabold text-[#00205B] mb-6">Scan & Download</h3>
             <div className="p-3 bg-white border border-gray-200 rounded-2xl shadow-sm mb-6">
-              <QRCodeSVG value={`${hostUrl}/snapbooth/d?id=${downloadId}`} size={200} fgColor="#00205B" />
+              <QRCodeSVG value={`${hostUrl}/d?id=${downloadId}`} size={200} fgColor="#00205B" />
             </div>
             <p className="text-xs text-center text-gray-500 font-medium leading-relaxed">Scan kode QR dengan kamera HP Anda untuk mengunduh foto ke device masing-masing.</p>
           </div>

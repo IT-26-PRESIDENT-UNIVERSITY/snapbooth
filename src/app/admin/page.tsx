@@ -4,8 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { Trash2, Upload, Plus, AlertCircle, ArrowLeft, Lock } from 'lucide-react';
 import Link from 'next/link';
-import { saveCustomTemplate, deleteCustomTemplate, updateCustomTemplate } from '@/lib/templateDB';
-
 export default function AdminPage() {
   const { templates, fetchGlobalTemplates } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -133,17 +131,20 @@ export default function AdminPage() {
       }
 
       const id = `custom-${Date.now()}`;
-      const newTemplate = {
-        id,
-        name: file.name.replace(/\.[^/.]+$/, ''),
-        url: dataUrl,
-        isCustom: true,
-        active: true,
-        layout: selectedLayout,
-      };
-
       try {
-        await saveCustomTemplate(newTemplate);
+        const res = await fetch('/api/templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            name: file.name.replace(/\.[^/.]+$/, ''),
+            layout: selectedLayout,
+            imageBase64: dataUrl
+          })
+        });
+
+        if (!res.ok) throw new Error('Failed to save on server');
+        
         await fetchGlobalTemplates();
       } catch (err: any) {
         console.error('Upload failed', err);
@@ -163,7 +164,7 @@ export default function AdminPage() {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Hapus template ${name}?`)) return;
     try {
-      await deleteCustomTemplate(id);
+      await fetch(`/api/templates/${id}`, { method: 'DELETE' });
       await fetchGlobalTemplates();
     } catch (err) {
       alert('Gagal menghapus template');
@@ -172,7 +173,11 @@ export default function AdminPage() {
 
   const handleToggle = async (id: string, active: boolean) => {
     try {
-      await updateCustomTemplate(id, { active });
+      await fetch(`/api/templates/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active })
+      });
       await fetchGlobalTemplates();
     } catch (err) {
       alert('Gagal mengubah status');
@@ -214,7 +219,7 @@ export default function AdminPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 pb-4 border-b border-gray-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-1">Manajemen Template</h1>
-          <p className="text-gray-500 text-xs sm:text-sm">Upload frame custom untuk photobooth (Tersimpan di Browser)</p>
+          <p className="text-gray-500 text-xs sm:text-sm">Upload frame custom untuk photobooth (Tersinkron Global via Netlify)</p>
         </div>
         <Link href="/" className="btn-secondary px-4 py-2 flex items-center gap-2 self-start sm:self-auto text-sm">
           <ArrowLeft size={16} /> Ke Photobooth
