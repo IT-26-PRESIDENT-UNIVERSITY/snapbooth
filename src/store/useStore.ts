@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 
 export type PhotoFormat = 'single' | 'strip2' | 'strip4';
 export type TemplateLayout = 'single' | 'strip-3' | 'grid-4';
@@ -48,23 +48,10 @@ export const useStore = create<PhotoboothState>()((set, get) => ({
   setTemplates: (templates) => set({ templates }),
   
   fetchGlobalTemplates: async () => {
-    try {
-      const res = await fetch('/api/templates');
-      const contentType = res.headers.get('content-type');
-      if (res.ok && contentType && contentType.includes('application/json')) {
-        const meta = await res.json();
-        const allTemplates: Template[] = meta.map((m: any) => ({
-          ...m,
-          url: m.isCustom ? `/api/image/${m.id}` : m.url
-        }));
-        set({ templates: allTemplates });
-      } else {
-        set({ templates: defaultTemplates });
-      }
-    } catch (e) {
-      console.warn('Fallback to local templates on static export');
-      set({ templates: defaultTemplates });
-    }
+    // Load custom templates from localStorage (static site — no API)
+    const stored = localStorage.getItem('presuniv_custom_templates');
+    const customTemplates: Template[] = stored ? JSON.parse(stored) : [];
+    set({ templates: [...defaultTemplates, ...customTemplates] });
   },
 
   selectedTemplate: null,

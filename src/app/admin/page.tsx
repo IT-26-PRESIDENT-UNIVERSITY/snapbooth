@@ -115,9 +115,9 @@ export default function AdminPage() {
 
     const file = files[0];
 
-    // Enforce 2MB limit for Netlify Functions payload
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Ukuran file maksimal 2MB.');
+    // Enforce 5MB limit for localStorage
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Ukuran file maksimal 5MB.');
       setIsUploading(false);
       return;
     }
@@ -132,25 +132,24 @@ export default function AdminPage() {
       }
 
       const id = `custom-${Date.now()}`;
+      const newTemplate = {
+        id,
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        url: dataUrl,
+        isCustom: true,
+        active: true,
+        layout: selectedLayout,
+      };
 
       try {
-        const res = await fetch('/api/templates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id,
-            name: file.name.replace(/\.[^/.]+$/, ''),
-            layout: selectedLayout,
-            imageBase64: dataUrl
-          })
-        });
-
-        if (!res.ok) throw new Error('Failed to save on server');
-        
+        const stored = localStorage.getItem('presuniv_custom_templates');
+        const existing = stored ? JSON.parse(stored) : [];
+        existing.push(newTemplate);
+        localStorage.setItem('presuniv_custom_templates', JSON.stringify(existing));
         await fetchGlobalTemplates();
       } catch (err) {
         console.error('Upload failed', err);
-        setError('Gagal mengunggah template ke server.');
+        setError('Gagal menyimpan template. Pastikan penyimpanan browser tidak penuh.');
       } finally {
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -166,7 +165,10 @@ export default function AdminPage() {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Hapus template ${name}?`)) return;
     try {
-      await fetch(`/api/templates/${id}`, { method: 'DELETE' });
+      const stored = localStorage.getItem('presuniv_custom_templates');
+      const existing = stored ? JSON.parse(stored) : [];
+      const filtered = existing.filter((t: any) => t.id !== id);
+      localStorage.setItem('presuniv_custom_templates', JSON.stringify(filtered));
       await fetchGlobalTemplates();
     } catch (err) {
       alert('Gagal menghapus template');
@@ -175,11 +177,10 @@ export default function AdminPage() {
 
   const handleToggle = async (id: string, active: boolean) => {
     try {
-      await fetch(`/api/templates/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active })
-      });
+      const stored = localStorage.getItem('presuniv_custom_templates');
+      const existing = stored ? JSON.parse(stored) : [];
+      const updated = existing.map((t: any) => t.id === id ? { ...t, active } : t);
+      localStorage.setItem('presuniv_custom_templates', JSON.stringify(updated));
       await fetchGlobalTemplates();
     } catch (err) {
       alert('Gagal mengubah status');
@@ -221,7 +222,7 @@ export default function AdminPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 pb-4 border-b border-gray-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-1">Manajemen Template</h1>
-          <p className="text-gray-500 text-xs sm:text-sm">Upload frame custom untuk photobooth (Tersinkron Global via Netlify)</p>
+          <p className="text-gray-500 text-xs sm:text-sm">Upload frame custom untuk photobooth (Tersimpan di Browser)</p>
         </div>
         <Link href="/" className="btn-secondary px-4 py-2 flex items-center gap-2 self-start sm:self-auto text-sm">
           <ArrowLeft size={16} /> Ke Photobooth
@@ -283,7 +284,7 @@ export default function AdminPage() {
             {isUploading && (
               <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm flex items-center gap-2 text-gray-600">
                 <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
-                Mengunggah ke server...
+                Menyimpan template...
               </div>
             )}
 
