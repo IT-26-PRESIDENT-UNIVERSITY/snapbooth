@@ -526,6 +526,32 @@ export default function PhotoboothStudio() {
     }
   };
 
+  const handlePrint = () => {
+    if (!finalImage) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print Photobooth</title>
+            <style>
+              body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background: white; }
+              img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+              @media print {
+                @page { margin: 0; }
+                body { margin: 0; }
+              }
+            </style>
+          </head>
+          <body>
+            <img src="${finalImage}" onload="window.print(); window.close();" />
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
   const handlePDF = async () => {
     if (!finalImage) return;
     try {
@@ -820,8 +846,8 @@ export default function PhotoboothStudio() {
                 <button onClick={handleDownload} className="lg:bg-[#00205B] bg-[#FDB813] lg:hover:bg-[#00153D] hover:bg-[#e0a210] lg:text-white text-[#00205B] h-10 sm:h-12 px-4 sm:px-6 rounded-full flex items-center gap-1.5 text-xs sm:text-sm font-extrabold shadow-xl flex-shrink-0 transition-colors">
                   <Download size={14} className="sm:w-4 sm:h-4" /> Simpan Foto
                 </button>
-                <button onClick={() => setShowQR(true)} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-gray-100 bg-white/20 backdrop-blur-md lg:hover:bg-gray-200 flex items-center gap-1.5 text-xs sm:text-sm font-bold lg:text-[#00205B] text-white flex-shrink-0 transition-colors border border-transparent lg:border-none border-white/30 shadow-lg lg:shadow-none">
-                  <QrCode size={14} className="sm:w-4 sm:h-4" /> QR
+                <button onClick={handlePrint} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-gray-100 bg-white/20 backdrop-blur-md lg:hover:bg-gray-200 flex items-center gap-1.5 text-xs sm:text-sm font-bold lg:text-[#00205B] text-white flex-shrink-0 transition-colors border border-transparent lg:border-none border-white/30 shadow-lg lg:shadow-none">
+                  <Printer size={14} className="sm:w-4 sm:h-4" /> Print
                 </button>
               </>
             )}
