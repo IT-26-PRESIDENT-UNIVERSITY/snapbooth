@@ -143,7 +143,10 @@ export default function AdminPage() {
           })
         });
 
-        if (!res.ok) throw new Error('Failed to save on server');
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData?.detail || errData?.error || `Server error ${res.status}`);
+        }
         
         await fetchGlobalTemplates();
       } catch (err: any) {

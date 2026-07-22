@@ -4,6 +4,10 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+[functions]
+  # Increase body size limit for template image uploads (base64)
+  external_node_modules = ["@netlify/blobs"]
+
 [template]
   [template.environment]
     NEXT_PUBLIC_ADMIN_PIN = "Your secret PIN for the admin panel (e.g. 123456)"
