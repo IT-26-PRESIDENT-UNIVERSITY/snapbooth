@@ -373,6 +373,12 @@ export default function PhotoboothStudio() {
       'builtin-1': [{x:100, y:100, w:1000, h:1300}],
       'builtin-2': [{x:60,  y:60,  w:1080, h:1660}],
       'builtin-3': [{x:150, y:50,  w:900,  h:1700}],
+      'builtin-4': [
+        {x:50,   y:350,  w:1650, h:1800},  // Heart top-left
+        {x:1950, y:350,  w:1600, h:1600},  // Window top-right
+        {x:50,   y:2600, w:1650, h:1450},  // Window bottom-left
+        {x:1800, y:2800, w:1750, h:1650},  // Heart bottom-right
+      ],
     };
     const builtinHint = template?.id ? builtinSlots[template.id] : undefined;
     const slots = builtinHint || detectSlots(tplImg, photos.length);
