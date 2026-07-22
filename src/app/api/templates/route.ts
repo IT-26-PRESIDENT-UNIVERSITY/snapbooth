@@ -13,18 +13,19 @@ const defaultTemplates = [
 export async function GET() {
   try {
     const store = getStore('snapbooth');
-    let meta = await store.get('metadata', { type: 'json' });
+    let meta: any[] = await store.get('metadata', { type: 'json' }) || [];
     
-    // Seed default templates on first run
-    if (!meta || !Array.isArray(meta) || meta.length === 0) {
-      meta = defaultTemplates;
-      await store.setJSON('metadata', meta);
+    // Always ensure ALL built-in templates exist in metadata
+    const existingIds = new Set(meta.map((t: any) => t.id));
+    let needsUpdate = false;
+    for (const dt of defaultTemplates) {
+      if (!existingIds.has(dt.id)) {
+        meta.push(dt);
+        needsUpdate = true;
+      }
     }
-    
-    // Ensure built-in templates always exist in metadata in case they were lost
-    if (!meta.find((t: any) => t.id === 'builtin-1')) {
-       meta = [...defaultTemplates, ...meta.filter((t: any) => t.isCustom)];
-       await store.setJSON('metadata', meta);
+    if (needsUpdate || meta.length === 0) {
+      await store.setJSON('metadata', meta);
     }
     
     return NextResponse.json(meta);
