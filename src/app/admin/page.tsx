@@ -34,22 +34,42 @@ export default function AdminPage() {
     }
   };
 
-  const processImageRemovingBlack = (dataUrl: string): Promise<string> => {
+  const processImageRemovingBlack = async (dataUrl: string, applyRemove: boolean): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         if (!ctx) return resolve(dataUrl);
-        ctx.drawImage(img, 0, 0);
+
+        // Downscale large images (max 1080px width) to avoid 500 server payload errors
+        let targetWidth = img.width;
+        let targetHeight = img.height;
+        const MAX_WIDTH = 1080;
+        
+        if (targetWidth > MAX_WIDTH) {
+          const ratio = MAX_WIDTH / targetWidth;
+          targetWidth = MAX_WIDTH;
+          targetHeight = Math.floor(img.height * ratio);
+        }
+
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        
+        // Use better quality for downscaling
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+        if (!applyRemove) {
+          return resolve(canvas.toDataURL('image/png', 0.9));
+        }
 
         try {
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
           const data = imageData.data;
-          const W = canvas.width;
-          const H = canvas.height;
+          const W = targetWidth;
+          const H = targetHeight;
 
           // Only pixels that are very dark qualify as "black slot"
           const isBlack = (x: number, y: number) => {
@@ -125,9 +145,14 @@ export default function AdminPage() {
     reader.onload = async (event) => {
       let dataUrl = event.target?.result as string;
 
-      if (removeBlack) {
-        try { dataUrl = await processImageRemovingBlack(dataUrl); }
-        catch (err) { console.error('Failed to remove black bg', err); }
+      try {
+        // Always process image to downscale it to max 1080p, passing removeBlack flag
+        dataUrl = await processImageRemovingBlack(dataUrl, removeBlack);
+      } catch (err) {
+        console.error('Failed to process image', err);
+        setError('Gagal memproses gambar. Format mungkin tidak didukung.');
+        setIsUploading(false);
+        return;
       }
 
       const id = `custom-${Date.now()}`;
