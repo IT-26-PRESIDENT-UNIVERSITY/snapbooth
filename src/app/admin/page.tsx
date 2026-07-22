@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { Trash2, Upload, Plus, AlertCircle, ArrowLeft, Lock } from 'lucide-react';
 import Link from 'next/link';
-
 export default function AdminPage() {
   const { templates, fetchGlobalTemplates } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -115,9 +114,9 @@ export default function AdminPage() {
 
     const file = files[0];
 
-    // Enforce 2MB limit for Netlify Functions payload
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Ukuran file maksimal 2MB.');
+    // Enforce 5MB limit for localStorage
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Ukuran file maksimal 5MB.');
       setIsUploading(false);
       return;
     }
@@ -132,7 +131,6 @@ export default function AdminPage() {
       }
 
       const id = `custom-${Date.now()}`;
-
       try {
         const res = await fetch('/api/templates', {
           method: 'POST',
@@ -148,9 +146,9 @@ export default function AdminPage() {
         if (!res.ok) throw new Error('Failed to save on server');
         
         await fetchGlobalTemplates();
-      } catch (err) {
+      } catch (err: any) {
         console.error('Upload failed', err);
-        setError('Gagal mengunggah template ke server.');
+        setError(`Gagal menyimpan template: ${err?.message || err}`);
       } finally {
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -283,7 +281,7 @@ export default function AdminPage() {
             {isUploading && (
               <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm flex items-center gap-2 text-gray-600">
                 <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
-                Mengunggah ke server...
+                Menyimpan template...
               </div>
             )}
 

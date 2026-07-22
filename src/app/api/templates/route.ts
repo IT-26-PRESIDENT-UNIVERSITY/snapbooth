@@ -1,12 +1,12 @@
-import { getStore } from '@netlify/blobs';
+﻿import { getStore } from '@netlify/blobs';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 const defaultTemplates = [
-  { id: 'builtin-1', name: 'Polaroid Classic', url: '/templates/polaroid.svg', isCustom: false, active: true, layout: 'single' },
-  { id: 'builtin-2', name: 'Neon Cyberpunk', url: '/templates/neon.svg', isCustom: false, active: true, layout: 'single' },
-  { id: 'builtin-3', name: 'Vintage Film', url: '/templates/vintage.svg', isCustom: false, active: true, layout: 'single' },
+  { id: 'builtin-1', name: 'Polaroid Classic', url: '/snapbooth/templates/polaroid.svg', isCustom: false, active: true, layout: 'single' },
+  { id: 'builtin-2', name: 'Neon Cyberpunk', url: '/snapbooth/templates/neon.svg', isCustom: false, active: true, layout: 'single' },
+  { id: 'builtin-3', name: 'Vintage Film', url: '/snapbooth/templates/vintage.svg', isCustom: false, active: true, layout: 'single' },
 ];
 
 export async function GET() {
