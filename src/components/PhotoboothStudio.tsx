@@ -114,19 +114,10 @@ export default function PhotoboothStudio() {
     return () => { running = false; seg?.close(); };
   }, [removeBackground]);
 
-  // â”€â”€â”€ Live Photo canvas loop (runs always in background) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Live Photo canvas loop (runs always in background) ———————————————————————
   useEffect(() => {
     let running = true;
     let raf: number;
-
-    // Pre-load template image for compositing
-    let templateImg: HTMLImageElement | null = null;
-    if (selectedTemplate) {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.src = selectedTemplate.url;
-      img.onload = () => { templateImg = img; };
-    }
 
     const draw = () => {
       if (!running) return;
@@ -148,10 +139,6 @@ export default function PhotoboothStudio() {
             ctx.scale(-1, 1);
             ctx.drawImage(video, 0, 0, lc.width, lc.height);
             ctx.restore();
-          }
-          // Overlay template on the live video
-          if (templateImg) {
-            ctx.drawImage(templateImg, 0, 0, lc.width, lc.height);
           }
         }
       }
@@ -665,30 +652,59 @@ export default function PhotoboothStudio() {
             </>
           )}
 
-          {/* FASE REVIEW — user picks which photo to retake */}
+          {/* FASE REVIEW — pick template + preview */}
           {appPhase === 'review' && capturedPhotos.length > 0 && (
-            <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 lg:bg-gray-50 bg-black/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-4 sm:p-6 overflow-y-auto">
-              <h2 className="text-lg sm:text-xl font-extrabold lg:text-[#00205B] text-white mb-2 text-center">Review Foto</h2>
-              <p className="text-xs sm:text-sm lg:text-gray-500 text-white/60 mb-6 text-center">Klik foto yang ingin diulang, atau lanjutkan jika sudah puas.</p>
-              <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-8">
-                {capturedPhotos.map((photo, i) => (
-                  <button key={i} onClick={() => handleRetakeSingle(i)} className="relative group w-24 h-32 sm:w-28 sm:h-36 rounded-xl overflow-hidden border-2 border-white/20 lg:border-gray-200 shadow-md hover:border-[#8A1538] hover:shadow-xl transition-all flex-shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={photo} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-[#8A1538]/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white backdrop-blur-sm">
-                      <RotateCcw size={20} />
-                      <span className="text-xs font-bold mt-1">Ulang Foto {i + 1}</span>
-                    </div>
-                    <div className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{i + 1}/{requiredPhotos}</div>
+            <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 lg:bg-gray-50 bg-black/95 backdrop-blur-md z-30 flex flex-col p-4 sm:p-6 overflow-y-auto">
+              <h2 className="text-lg sm:text-xl font-extrabold lg:text-[#00205B] text-white mb-1 text-center">Pilih Frame</h2>
+              <p className="text-xs sm:text-sm lg:text-gray-500 text-white/60 mb-4 text-center">Pilih template lalu klik Lanjutkan. Klik foto kecil untuk mengulang.</p>
+
+              {/* Template selector */}
+              <div className="flex gap-2 overflow-x-auto pb-3 mb-4 snap-x custom-scrollbar justify-center">
+                {activeTemplates.map(tpl => (
+                  <button
+                    key={tpl.id}
+                    onClick={() => setSelectedTemplate(tpl)}
+                    className={`relative flex-shrink-0 w-16 h-22 sm:w-20 sm:h-28 rounded-xl overflow-hidden border-2 transition-all hover:scale-105 snap-center
+                      ${selectedTemplate?.id === tpl.id ? 'border-[#FDB813] shadow-[0_0_15px_rgba(253,184,19,0.6)]' : 'border-white/30 lg:border-gray-200'}`}
+                  >
+                    {tpl.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={tpl.url} alt={tpl.name} className="w-full h-full object-contain p-0.5" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs text-white/50">Wait</div>
+                    )}
+                    {selectedTemplate?.id === tpl.id && (
+                      <div className="absolute top-1 right-1 w-5 h-5 bg-[#FDB813] rounded-full flex items-center justify-center shadow-md">
+                        <Check size={11} color="#00205B" strokeWidth={3} />
+                      </div>
+                    )}
+                    <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] font-medium text-center py-0.5 truncate px-1">{tpl.name}</div>
                   </button>
                 ))}
               </div>
-              <div className="flex gap-3">
-                <button onClick={handleRetakeAll} className="h-11 px-5 rounded-full lg:bg-red-50 bg-red-500/20 backdrop-blur-md lg:text-[#8A1538] text-red-100 lg:hover:bg-red-100 hover:bg-red-500/40 flex items-center gap-2 text-sm font-bold transition-colors border border-transparent lg:border-none border-red-400/30">
-                  <RotateCcw size={16} /> Ulang Semua
+
+              {/* Photo thumbnails for retake */}
+              <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-4">
+                {capturedPhotos.map((photo, i) => (
+                  <button key={i} onClick={() => handleRetakeSingle(i)} className="relative group w-16 h-20 sm:w-20 sm:h-26 rounded-lg overflow-hidden border-2 border-white/20 lg:border-gray-200 shadow-md hover:border-[#8A1538] hover:shadow-xl transition-all flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-[#8A1538]/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white backdrop-blur-sm">
+                      <RotateCcw size={16} />
+                      <span className="text-[10px] font-bold mt-0.5">Ulang</span>
+                    </div>
+                    <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{i + 1}</div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3 justify-center">
+                <button onClick={handleRetakeAll} className="h-10 px-4 rounded-full lg:bg-red-50 bg-red-500/20 backdrop-blur-md lg:text-[#8A1538] text-red-100 lg:hover:bg-red-100 hover:bg-red-500/40 flex items-center gap-2 text-sm font-bold transition-colors border border-transparent lg:border-none border-red-400/30">
+                  <RotateCcw size={14} /> Ulang Semua
                 </button>
-                <button onClick={handleConfirmReview} disabled={isProcessing} className="h-11 px-6 rounded-full bg-gradient-to-r from-[#00205B] to-[#8A1538] text-white flex items-center gap-2 text-sm font-extrabold shadow-xl hover:shadow-2xl transition-all disabled:opacity-50">
-                  <ArrowRight size={16} /> Lanjutkan
+                <button onClick={handleConfirmReview} disabled={isProcessing || !selectedTemplate} className="h-10 px-5 rounded-full bg-gradient-to-r from-[#00205B] to-[#8A1538] text-white flex items-center gap-2 text-sm font-extrabold shadow-xl hover:shadow-2xl transition-all disabled:opacity-40">
+                  {isProcessing ? 'Memproses...' : <><ArrowRight size={16} /> Lanjutkan</>}
                 </button>
               </div>
             </div>
@@ -719,27 +735,8 @@ export default function PhotoboothStudio() {
         <div className="absolute bottom-0 inset-x-0 lg:relative lg:bottom-auto lg:inset-x-auto h-auto min-h-[9rem] lg:bg-white bg-transparent lg:border-t lg:border-gray-100 px-4 sm:px-5 pb-8 pt-4 lg:py-4 flex flex-col sm:flex-row items-center gap-4 z-40 pointer-events-none">
           
           {appPhase === 'capture' && (
-            <div className="w-full sm:flex-1 flex gap-2 overflow-x-auto items-center pb-2 sm:pb-0 pr-0 sm:pr-4 snap-x custom-scrollbar pointer-events-auto">
-              {activeTemplates.map(tpl => (
-                <button
-                  key={tpl.id}
-                  onClick={() => setSelectedTemplate(tpl)}
-                  className={`relative flex-shrink-0 w-14 h-20 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 snap-center
-                    ${selectedTemplate?.id === tpl.id ? 'border-[#8A1538] shadow-[0_0_15px_rgba(138,21,56,0.8)] lg:shadow-[0_0_10px_rgba(138,21,56,0.3)]' : 'border-white/40 lg:border-gray-200'}`}
-                >
-                  {tpl.url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={tpl.url} alt={tpl.name} className="w-full h-full object-contain p-0.5" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-white/50 lg:text-gray-400">Wait</div>
-                  )}
-                  {selectedTemplate?.id === tpl.id && (
-                    <div className="absolute top-1 right-1 w-4 h-4 bg-[#8A1538] rounded-full flex items-center justify-center shadow-md">
-                      <Check size={9} color="white" strokeWidth={3} />
-                    </div>
-                  )}
-                </button>
-              ))}
+            <div className="w-full sm:flex-1 flex items-center justify-center pointer-events-auto">
+              {/* Empty space - no template selector during capture */}
             </div>
           )}
 
