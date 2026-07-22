@@ -38,6 +38,7 @@ export default function PhotoboothStudio() {
   // Settings
   const [timerDuration, setTimerDuration] = useState(3);
   const [livePhotoEnabled, setLivePhotoEnabled] = useState(true);
+  const [photoCount, setPhotoCount] = useState<1 | 3 | 4>(1);
 
   // Phase
   const [appPhase, setAppPhase] = useState<AppPhase>('capture');
@@ -65,14 +66,13 @@ export default function PhotoboothStudio() {
     if (typeof window !== 'undefined') setHostUrl(window.location.origin);
   }, []);
 
-  // â”€â”€â”€ Required photos based on template layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const requiredPhotos =
-    selectedTemplate?.layout === 'single' ? 1
-    : selectedTemplate?.layout === 'strip-3' ? 3
-    : selectedTemplate?.layout === 'grid-4' ? 4
-    : (selectedTemplate?.isCustom ? 3 : 1);   // custom with no layout defaults to 3
+  // ─── Required photos based on user selection ──────────────────────────────
+  const requiredPhotos = photoCount;
 
-  // â”€â”€â”€ AI Segmentation loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Map photo count to layout type for filtering templates
+  const layoutForCount = (count: number) => count === 1 ? 'single' : count === 3 ? 'strip-3' : 'grid-4';
+
+  // ——— AI Segmentation loop —————————————————————————————————————————————————————
   useEffect(() => {
     if (!removeBackground) return;
     let running = true;
@@ -260,6 +260,8 @@ export default function PhotoboothStudio() {
     capturedRef.current = [];
     retakeIndexRef.current = null;
     setRetakeIndex(null);
+    setSelectedTemplate(null);
+    setPreviewImage(null);
 
     // Reset recorder
     if (mediaRecorderRef.current) {
@@ -570,6 +572,11 @@ export default function PhotoboothStudio() {
   };
 
   const activeTemplates = templates.filter(t => t.active);
+  // In review, filter templates matching photo count
+  const matchingTemplates = activeTemplates.filter(t => {
+    const tLayout = t.layout || (t.isCustom ? 'strip-3' : 'single');
+    return tLayout === layoutForCount(photoCount);
+  });
   const shotLabel = retakeIndex !== null
     ? `Ulang Foto ${retakeIndex + 1} dari ${requiredPhotos}`
     : `Foto ${capturedPhotos.length + 1} dari ${requiredPhotos}`;
@@ -687,9 +694,9 @@ export default function PhotoboothStudio() {
                 )}
               </div>
 
-              {/* Template selector */}
+              {/* Template selector - filtered by photo count */}
               <div className="flex gap-2 overflow-x-auto pb-2 mb-3 snap-x custom-scrollbar justify-center">
-                {activeTemplates.map(tpl => (
+                {matchingTemplates.map(tpl => (
                   <button
                     key={tpl.id}
                     onClick={() => setSelectedTemplate(tpl)}
@@ -764,8 +771,22 @@ export default function PhotoboothStudio() {
         <div className="absolute bottom-0 inset-x-0 lg:relative lg:bottom-auto lg:inset-x-auto h-auto min-h-[9rem] lg:bg-white bg-transparent lg:border-t lg:border-gray-100 px-4 sm:px-5 pb-8 pt-4 lg:py-4 flex flex-col sm:flex-row items-center gap-4 z-40 pointer-events-none">
           
           {appPhase === 'capture' && (
-            <div className="w-full sm:flex-1 flex items-center justify-center pointer-events-auto">
-              {/* Empty space - no template selector during capture */}
+            <div className="w-full sm:flex-1 flex items-center justify-center gap-2 pointer-events-auto">
+              {/* Photo count selector */}
+              <div className="flex items-center gap-1 bg-black/40 lg:bg-gray-100 backdrop-blur-md rounded-full p-1 border border-white/20 lg:border-gray-200">
+                {([1, 3, 4] as const).map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setPhotoCount(n)}
+                    disabled={isProcessing || countdown !== null}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${photoCount === n
+                      ? 'bg-[#FDB813] text-[#00205B] shadow-md'
+                      : 'text-white/70 lg:text-gray-500 hover:text-white lg:hover:text-gray-800'}`}
+                  >
+                    {n} Foto
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
