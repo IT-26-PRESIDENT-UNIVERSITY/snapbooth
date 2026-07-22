@@ -15,7 +15,7 @@ export default function AdminPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [removeBlack, setRemoveBlack] = useState(true);
-  const [selectedLayout, setSelectedLayout] = useState<'single' | 'strip-3' | 'grid-4'>('single');
+  const [selectedLayout, setSelectedLayout] = useState<'single' | 'strip-3' | 'grid-4'>('grid-4');
 
   useEffect(() => {
     if (isAuthenticated) {

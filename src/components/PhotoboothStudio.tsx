@@ -38,7 +38,7 @@ export default function PhotoboothStudio() {
   // Settings
   const [timerDuration, setTimerDuration] = useState(3);
   const [livePhotoEnabled, setLivePhotoEnabled] = useState(true);
-  const [photoCount, setPhotoCount] = useState<1 | 3 | 4>(1);
+  const [photoCount, setPhotoCount] = useState<1 | 3 | 4>(4);
 
   // Phase
   const [appPhase, setAppPhase] = useState<AppPhase>('capture');
@@ -388,7 +388,7 @@ export default function PhotoboothStudio() {
         const s = slots[i];
         slotX = s.x; slotY = s.y; slotW = s.w; slotH = s.h;
       } else {
-        const layout = template.layout || (template.isCustom ? 'strip-3' : 'single');
+        const layout = template.layout || (template.isCustom ? 'strip-3' : 'grid-4');
         if (layout === 'single') {
           slotX = 0; slotY = 0; slotW = W; slotH = H;
         } else if (layout === 'strip-3') {
