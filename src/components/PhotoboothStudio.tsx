@@ -655,7 +655,7 @@ export default function PhotoboothStudio() {
               {selectedTemplate?.url && (
                 <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={selectedTemplate.url} alt="frame guide" className="absolute inset-0 w-full h-full object-contain lg:object-cover opacity-50 lg:opacity-70" style={{ mixBlendMode: 'normal' }} />
+                  <img src={selectedTemplate.url} alt="frame guide" className="absolute inset-0 w-full h-full object-contain lg:object-cover opacity-70" style={{ mixBlendMode: 'normal' }} />
                 </div>
               )}
 
