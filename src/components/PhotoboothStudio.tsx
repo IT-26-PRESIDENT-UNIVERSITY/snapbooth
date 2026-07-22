@@ -244,8 +244,9 @@ export default function PhotoboothStudio() {
       setCapturedPhotos(updated);
       retakeIndexRef.current = null;
       setRetakeIndex(null);
-      // Auto composite!
-      finishComposite();
+      // Go back to review phase
+      setAppPhase('review');
+      setIsProcessing(false);
     } else {
       // Normal sequence
       capturedRef.current.push(photo);
@@ -257,8 +258,9 @@ export default function PhotoboothStudio() {
           runCountdownThenSnap();
         }, 1000);
       } else {
-        // All photos taken â€” auto composite!
-        finishComposite();
+        // All photos taken — go to review phase
+        setAppPhase('review');
+        setIsProcessing(false);
       }
     }
   };
@@ -287,6 +289,10 @@ export default function PhotoboothStudio() {
     setIsProcessing(true);
     retakeIndexRef.current = index;
     startCaptureSequence(capturedPhotos, index);
+  };
+
+  const handleConfirmReview = () => {
+    finishComposite();
   };
 
   const handleRetakeAll = () => {
@@ -649,8 +655,7 @@ export default function PhotoboothStudio() {
               {selectedTemplate?.url && (
                 <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={selectedTemplate.url} alt="frame guide" className="absolute inset-0 w-full h-full object-cover opacity-70" style={{ mixBlendMode: 'normal' }} />
-                  <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.25) 100%)' }} />
+                  <img src={selectedTemplate.url} alt="frame guide" className="absolute inset-0 w-full h-full object-contain lg:object-cover opacity-50 lg:opacity-70" style={{ mixBlendMode: 'normal' }} />
                 </div>
               )}
 
@@ -663,6 +668,35 @@ export default function PhotoboothStudio() {
 
               <div className={`absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-75 ${isFlashing ? 'opacity-100' : 'opacity-0'}`} />
             </>
+          )}
+
+          {/* FASE REVIEW — user picks which photo to retake */}
+          {appPhase === 'review' && capturedPhotos.length > 0 && (
+            <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 lg:bg-gray-50 bg-black/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-4 sm:p-6 overflow-y-auto">
+              <h2 className="text-lg sm:text-xl font-extrabold lg:text-[#00205B] text-white mb-2 text-center">Review Foto</h2>
+              <p className="text-xs sm:text-sm lg:text-gray-500 text-white/60 mb-6 text-center">Klik foto yang ingin diulang, atau lanjutkan jika sudah puas.</p>
+              <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-8">
+                {capturedPhotos.map((photo, i) => (
+                  <button key={i} onClick={() => handleRetakeSingle(i)} className="relative group w-24 h-32 sm:w-28 sm:h-36 rounded-xl overflow-hidden border-2 border-white/20 lg:border-gray-200 shadow-md hover:border-[#8A1538] hover:shadow-xl transition-all flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-[#8A1538]/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white backdrop-blur-sm">
+                      <RotateCcw size={20} />
+                      <span className="text-xs font-bold mt-1">Ulang Foto {i + 1}</span>
+                    </div>
+                    <div className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{i + 1}/{requiredPhotos}</div>
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={handleRetakeAll} className="h-11 px-5 rounded-full lg:bg-red-50 bg-red-500/20 backdrop-blur-md lg:text-[#8A1538] text-red-100 lg:hover:bg-red-100 hover:bg-red-500/40 flex items-center gap-2 text-sm font-bold transition-colors border border-transparent lg:border-none border-red-400/30">
+                  <RotateCcw size={16} /> Ulang Semua
+                </button>
+                <button onClick={handleConfirmReview} disabled={isProcessing} className="h-11 px-6 rounded-full bg-gradient-to-r from-[#00205B] to-[#8A1538] text-white flex items-center gap-2 text-sm font-extrabold shadow-xl hover:shadow-2xl transition-all disabled:opacity-50">
+                  <ArrowRight size={16} /> Lanjutkan
+                </button>
+              </div>
+            </div>
           )}
 
           {/* FASE RESULT */}
@@ -681,22 +715,6 @@ export default function PhotoboothStudio() {
                     <button onClick={() => setViewMode('video')} className={`p-2 rounded-full transition-colors ${viewMode === 'video' ? 'bg-[#FDB813] text-black' : 'text-white'}`}><Play size={14} /></button>
                   </div>
                 )}
-              </div>
-
-              <div className="mt-6 flex flex-col items-center">
-                <p className="text-sm font-bold lg:text-[#00205B] text-white/90 mb-3 text-center uppercase tracking-wide">Ada yang kurang pas? Klik foto untuk mengulang</p>
-                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
-                  {capturedPhotos.map((photo, i) => (
-                    <button key={i} onClick={() => handleRetakeSingle(i)} className="relative group w-16 h-20 sm:w-20 sm:h-28 rounded-xl overflow-hidden border-2 border-white/20 lg:border-gray-200 shadow-md hover:border-[#8A1538] hover:shadow-xl transition-all flex-shrink-0">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-[#8A1538]/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white backdrop-blur-sm">
-                        <RotateCcw size={16} />
-                        <span className="text-[10px] font-bold mt-1">Ulang {i + 1}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
           )}
