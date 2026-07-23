@@ -590,6 +590,8 @@ export default function PhotoboothStudio() {
       }
 
       ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.beginPath();
       ctx.rect(slotX, slotY, slotW, slotH);
       ctx.clip();
@@ -875,6 +877,7 @@ export default function PhotoboothStudio() {
                       audio={false}
                       mirrored={facingMode === 'user'}
                       screenshotFormat="image/png"
+                      forceScreenshotSourceSize={true}
                       videoConstraints={{ facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }}
                       className={`absolute inset-0 w-full h-full object-cover ${(appPhase !== 'capture' || removeBackground) ? 'opacity-0' : ''}`}
                     />
