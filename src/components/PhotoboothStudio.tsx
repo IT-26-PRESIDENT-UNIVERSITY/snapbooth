@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import Webcam from 'react-webcam';
 import { useStore } from '@/store/useStore';
 import {
@@ -49,18 +49,20 @@ export default function PhotoboothStudio() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
-  const requiredPhotos = 4;
+  const requiredPhotos = useMemo(() => {
+    if (!selectedTemplate) return 4;
+    const layout = selectedTemplate.layout || (selectedTemplate.isCustom ? 'strip-3' : 'grid-4');
+    if (layout === 'single') return 1;
+    if (layout === 'strip-3') return 3;
+    if (layout === 'grid-4') return 4;
+    return 4;
+  }, [selectedTemplate]);
 
   useEffect(() => {
     const active = templates.filter(t => t.active);
-    const grids = active.filter(t => (t.layout || (t.isCustom ? 'strip-3' : 'single')) === 'grid-4');
-
-    if (!selectedTemplate) {
-      if (grids.length > 0) {
-        setSelectedTemplate(grids[0]);
-      } else if (active.length > 0) {
-        setSelectedTemplate(active[0]);
-      }
+    
+    if (!selectedTemplate && active.length > 0) {
+      setSelectedTemplate(active[0]);
     }
   }, [templates, selectedTemplate, setSelectedTemplate]);
 
@@ -636,10 +638,6 @@ export default function PhotoboothStudio() {
   };
 
   const activeTemplates = templates.filter(t => t.active);
-  const gridTemplates = activeTemplates.filter(t => {
-    const tLayout = t.layout || (t.isCustom ? 'strip-3' : 'single');
-    return tLayout === 'grid-4';
-  });
   const shotLabel = retakeIndex !== null
     ? `Ulang Foto ${retakeIndex + 1} dari ${requiredPhotos}`
     : `Foto ${capturedPhotos.length + 1} dari ${requiredPhotos}`;
@@ -727,6 +725,37 @@ export default function PhotoboothStudio() {
             {appPhase === 'capture' && (
               <div className={`absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-75 ${isFlashing ? 'opacity-100' : 'opacity-0'}`} />
             )}
+
+            {/* Template Selector Overlay during Capture */}
+            {appPhase === 'capture' && countdown === null && (
+              <div className="absolute bottom-6 left-0 right-0 z-40 flex flex-col items-center">
+                <div className="bg-black/50 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20 shadow-2xl max-w-[90%]">
+                  <div className="text-white/80 text-xs font-bold text-center mb-2 uppercase tracking-wider">Pilih Frame</div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 snap-x custom-scrollbar justify-center">
+                    {activeTemplates.map(tpl => (
+                      <button
+                        key={tpl.id}
+                        onClick={() => setSelectedTemplate(tpl)}
+                        className={`relative flex-shrink-0 w-14 h-20 sm:w-16 sm:h-22 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 snap-center
+                          ${selectedTemplate?.id === tpl.id ? 'border-[#FDB813] shadow-[0_0_12px_rgba(253,184,19,0.6)]' : 'border-white/30 hover:border-white/60'}`}
+                      >
+                        {tpl.url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={tpl.url} alt={tpl.name} className="w-full h-full object-contain p-0.5 bg-black/40" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs text-white/50">Wait</div>
+                        )}
+                        {selectedTemplate?.id === tpl.id && (
+                          <div className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#FDB813] rounded-full flex items-center justify-center shadow-md">
+                            <Check size={9} color="#00205B" strokeWidth={3} />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {appPhase === 'review' && capturedPhotos.length > 0 && (
@@ -742,29 +771,6 @@ export default function PhotoboothStudio() {
                     <p className="text-sm font-bold lg:text-gray-400 text-white/50">Pilih frame di bawah untuk melihat preview</p>
                   </div>
                 )}
-              </div>
-
-              <div className="flex gap-2 overflow-x-auto pb-2 mb-3 snap-x custom-scrollbar justify-center">
-                {gridTemplates.map(tpl => (
-                  <button
-                    key={tpl.id}
-                    onClick={() => setSelectedTemplate(tpl)}
-                    className={`relative flex-shrink-0 w-14 h-20 sm:w-16 sm:h-22 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 snap-center
-                      ${selectedTemplate?.id === tpl.id ? 'border-[#FDB813] shadow-[0_0_12px_rgba(253,184,19,0.6)]' : 'border-white/30 lg:border-gray-200'}`}
-                  >
-                    {tpl.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={tpl.url} alt={tpl.name} className="w-full h-full object-contain p-0.5" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs text-white/50">Wait</div>
-                    )}
-                    {selectedTemplate?.id === tpl.id && (
-                      <div className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#FDB813] rounded-full flex items-center justify-center shadow-md">
-                        <Check size={9} color="#00205B" strokeWidth={3} />
-                      </div>
-                    )}
-                  </button>
-                ))}
               </div>
 
               <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3">
