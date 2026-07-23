@@ -180,6 +180,35 @@ export default function PhotoboothStudio() {
           }
           finalSlots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
         }
+      } else if (layout === 'strip-4' || layout === 'strip-3') {
+        const count = layout === 'strip-4' ? 4 : 3;
+        for (let i = 0; i < count; i++) {
+          let qx = 0;
+          let qy = Math.floor(i * (H / count));
+          let qw = W;
+          let qh = Math.floor(H / count);
+          let slotX = qx, slotY = qy, slotW = qw, slotH = qh;
+
+          if (tplData) {
+            let minX = W, minY = H, maxX = 0, maxY = 0;
+            let found = false;
+            for (let y = qy; y < qy + qh; y++) {
+              for (let x = qx; x < qx + qw; x++) {
+                if (tplData[(y * W + x) * 4 + 3] < 40) {
+                  if (x < minX) minX = x;
+                  if (y < minY) minY = y;
+                  if (x > maxX) maxX = x;
+                  if (y > maxY) maxY = y;
+                  found = true;
+                }
+              }
+            }
+            if (found) {
+              slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
+            }
+          }
+          finalSlots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
+        }
       } else {
         finalSlots = detectSlots(img);
         if (finalSlots.length === 0) {
@@ -480,6 +509,36 @@ export default function PhotoboothStudio() {
           let qy = Math.floor(i / 2) * Math.floor(H / 2);
           let qw = Math.floor(W / 2);
           let qh = Math.floor(H / 2);
+          let slotX = qx, slotY = qy, slotW = qw, slotH = qh;
+
+          if (tplData) {
+            let minX = W, minY = H, maxX = 0, maxY = 0;
+            let found = false;
+            for (let y = qy; y < qy + qh; y++) {
+              for (let x = qx; x < qx + qw; x++) {
+                if (tplData[(y * W + x) * 4 + 3] < 40) {
+                  if (x < minX) minX = x;
+                  if (y < minY) minY = y;
+                  if (x > maxX) maxX = x;
+                  if (y > maxY) maxY = y;
+                  found = true;
+                }
+              }
+            }
+            if (found) {
+              slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
+            }
+          }
+          slots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
+        }
+      } else if (layout === 'strip-4' || layout === 'strip-3') {
+        slots = [];
+        const count = layout === 'strip-4' ? 4 : 3;
+        for (let i = 0; i < count; i++) {
+          let qx = 0;
+          let qy = Math.floor(i * (H / count));
+          let qw = W;
+          let qh = Math.floor(H / count);
           let slotX = qx, slotY = qy, slotW = qw, slotH = qh;
 
           if (tplData) {
