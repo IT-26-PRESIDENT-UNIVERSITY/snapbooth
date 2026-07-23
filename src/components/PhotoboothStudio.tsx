@@ -66,6 +66,38 @@ const detectSlots = (tplImg: HTMLImageElement) => {
   return slots;
 };
 
+const applyAspectRatio = (slots: {x: number, y: number, w: number, h: number}[], aspectRatioStr?: string) => {
+  if (!aspectRatioStr) return slots;
+  const parts = aspectRatioStr.split(':');
+  if (parts.length !== 2) return slots;
+  const targetW = parseFloat(parts[0]);
+  const targetH = parseFloat(parts[1]);
+  if (isNaN(targetW) || isNaN(targetH) || targetH === 0) return slots;
+  const targetRatio = targetW / targetH;
+
+  return slots.map(s => {
+    const cx = s.x + s.w / 2;
+    const cy = s.y + s.h / 2;
+    const currentRatio = s.w / s.h;
+    
+    let newW = s.w;
+    let newH = s.h;
+
+    if (currentRatio > targetRatio) {
+      newH = s.w / targetRatio;
+    } else {
+      newW = s.h * targetRatio;
+    }
+
+    return {
+      x: cx - newW / 2,
+      y: cy - newH / 2,
+      w: newW,
+      h: newH
+    };
+  });
+};
+
 type AppPhase = 'capture' | 'review' | 'result';
 
 export default function PhotoboothStudio() {
@@ -180,41 +212,13 @@ export default function PhotoboothStudio() {
           }
           finalSlots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
         }
-      } else if (layout === 'strip-4' || layout === 'strip-3') {
-        const count = layout === 'strip-4' ? 4 : 3;
-        for (let i = 0; i < count; i++) {
-          let qx = 0;
-          let qy = Math.floor(i * (H / count));
-          let qw = W;
-          let qh = Math.floor(H / count);
-          let slotX = qx, slotY = qy, slotW = qw, slotH = qh;
-
-          if (tplData) {
-            let minX = W, minY = H, maxX = 0, maxY = 0;
-            let found = false;
-            for (let y = qy; y < qy + qh; y++) {
-              for (let x = qx; x < qx + qw; x++) {
-                if (tplData[(y * W + x) * 4 + 3] < 40) {
-                  if (x < minX) minX = x;
-                  if (y < minY) minY = y;
-                  if (x > maxX) maxX = x;
-                  if (y > maxY) maxY = y;
-                  found = true;
-                }
-              }
-            }
-            if (found) {
-              slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
-            }
-          }
-          finalSlots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
-        }
       } else {
         finalSlots = detectSlots(img);
         if (finalSlots.length === 0) {
           finalSlots = [{x: 0, y: 0, w: W, h: H}];
         }
       }
+      finalSlots = applyAspectRatio(finalSlots, selectedTemplate.aspectRatio);
       setTemplateSlots(finalSlots);
     };
     img.src = selectedTemplate.url;
@@ -531,42 +535,13 @@ export default function PhotoboothStudio() {
           }
           slots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
         }
-      } else if (layout === 'strip-4' || layout === 'strip-3') {
-        slots = [];
-        const count = layout === 'strip-4' ? 4 : 3;
-        for (let i = 0; i < count; i++) {
-          let qx = 0;
-          let qy = Math.floor(i * (H / count));
-          let qw = W;
-          let qh = Math.floor(H / count);
-          let slotX = qx, slotY = qy, slotW = qw, slotH = qh;
-
-          if (tplData) {
-            let minX = W, minY = H, maxX = 0, maxY = 0;
-            let found = false;
-            for (let y = qy; y < qy + qh; y++) {
-              for (let x = qx; x < qx + qw; x++) {
-                if (tplData[(y * W + x) * 4 + 3] < 40) {
-                  if (x < minX) minX = x;
-                  if (y < minY) minY = y;
-                  if (x > maxX) maxX = x;
-                  if (y > maxY) maxY = y;
-                  found = true;
-                }
-              }
-            }
-            if (found) {
-              slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
-            }
-          }
-          slots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
-        }
       } else {
         slots = detectSlots(tplImg);
         if (slots.length === 0) {
           slots = [{x: 0, y: 0, w: W, h: H}];
         }
       }
+      slots = applyAspectRatio(slots, template.aspectRatio);
     }
 
     for (let i = 0; i < photos.length; i++) {
