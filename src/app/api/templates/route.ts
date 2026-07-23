@@ -39,10 +39,10 @@ export async function POST(req: Request) {
   try {
     const store = getStore('snapbooth');
     const body = await req.json();
-    const { id, name, layout, imageBase64 } = body;
+    const { id, name, layout, aspectRatio, imageBase64 } = body;
 
-    if (!id || !imageBase64) {
-      return NextResponse.json({ error: 'Missing id or imageBase64' }, { status: 400 });
+    if (!id || !imageBase64 || !layout || !aspectRatio) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     // Save image blob
@@ -56,7 +56,8 @@ export async function POST(req: Request) {
     meta.push({
       id,
       name: name || 'Custom Template',
-      layout: layout || 'single',
+      layout,
+      aspectRatio,
       isCustom: true,
       active: true,
     });

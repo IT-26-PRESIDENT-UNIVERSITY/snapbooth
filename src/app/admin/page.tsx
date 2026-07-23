@@ -15,7 +15,8 @@ export default function AdminPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [removeBlack, setRemoveBlack] = useState(true);
-  const [selectedLayout, setSelectedLayout] = useState<'single' | 'strip-3' | 'grid-4'>('grid-4');
+  const [selectedLayout, setSelectedLayout] = useState<'strip-4' | 'grid-4' | 'strip-3' | 'single'>('strip-4');
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState('9:16');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -164,6 +165,7 @@ export default function AdminPage() {
             id,
             name: file.name.replace(/\.[^/.]+$/, ''),
             layout: selectedLayout,
+            aspectRatio: selectedAspectRatio,
             imageBase64: dataUrl
           })
         });
@@ -263,15 +265,30 @@ export default function AdminPage() {
             </h2>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tata Letak (Jumlah Foto)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tata Letak (Grid/Format)</label>
               <select 
                 value={selectedLayout} 
                 onChange={(e) => setSelectedLayout(e.target.value as any)}
                 className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black"
               >
-                <option value="single">1 Foto (Penuh)</option>
-                <option value="strip-3">3 Foto (Strip Vertikal)</option>
-                <option value="grid-4">4 Foto (Grid 2x2)</option>
+                <option value="strip-4">4x1 Vertical (Photostrip)</option>
+                <option value="grid-4">2x2 Grid (FAISM)</option>
+                <option value="strip-3">3x1 Vertical</option>
+                <option value="single">1x1 Single (Polaroid)</option>
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Aspek Rasio Lensa</label>
+              <select 
+                value={selectedAspectRatio} 
+                onChange={(e) => setSelectedAspectRatio(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black"
+              >
+                <option value="9:16">9:16 (Standard Portrait)</option>
+                <option value="3:4">3:4 (Classic Portrait)</option>
+                <option value="1:1">1:1 (Square/Heart)</option>
+                <option value="4:3">4:3 (Landscape)</option>
               </select>
             </div>
             
