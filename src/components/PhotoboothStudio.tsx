@@ -11,12 +11,6 @@ import Script from 'next/script';
 import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
 
-const FRAME_TEMPLATES = [
-  { id: 'polaroid', label: 'Polaroid', url: '/templates/polaroid.svg' },
-  { id: 'vintage', label: 'Vintage', url: '/templates/vintage.svg' },
-  { id: 'neon', label: 'Neon', url: '/templates/neon.svg' }
-];
-
 declare global {
   interface Window { SelfieSegmentation: any; }
 }
@@ -47,26 +41,26 @@ export default function PhotoboothStudio() {
   const [appPhase, setAppPhase] = useState<AppPhase>('capture');
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [retakeIndex, setRetakeIndex] = useState<number | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'photo' | 'video'>('photo');
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
-  
-  const capturedRef = useRef<string[]>([]);
-  const retakeIndexRef = useRef<number | null>(null);
 
-  const requiredPhotos =
-    selectedTemplate?.layout === 'single' ? 1
-    : selectedTemplate?.layout === 'strip-3' ? 3
-    : selectedTemplate?.layout === 'grid-4' ? 4
-    : (selectedTemplate?.isCustom ? 3 : 1);
+  const requiredPhotos = 4;
 
-    useEffect(() => {
+  useEffect(() => {
     const active = templates.filter(t => t.active);
-    if (!selectedTemplate && active.length > 0) {
-      setSelectedTemplate(active[0]);
+    const grids = active.filter(t => (t.layout || (t.isCustom ? 'strip-3' : 'single')) === 'grid-4');
+
+    if (!selectedTemplate) {
+      if (grids.length > 0) {
+        setSelectedTemplate(grids[0]);
+      } else if (active.length > 0) {
+        setSelectedTemplate(active[0]);
+      }
     }
   }, [templates, selectedTemplate, setSelectedTemplate]);
 
@@ -105,7 +99,7 @@ export default function PhotoboothStudio() {
       const loop = async () => {
         if (!running) return;
         if (video.readyState >= 2) {
-          try { await seg.send({ image: video }); } catch (_) {}
+          try { await seg.send({ image: video }); } catch (_) { }
         }
         requestAnimationFrame(loop);
       };
@@ -119,63 +113,66 @@ export default function PhotoboothStudio() {
   useEffect(() => {
     let running = true;
     let raf: number;
-    let templateImg: HTMLImageElement | null = null;
-    
-    if (selectedTemplate) {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.src = selectedTemplate.url;
-      img.onload = () => { templateImg = img; };
-    }
 
     const draw = () => {
       if (!running) return;
       const video = webcamRef.current?.video;
       const lc = liveCanvasRef.current;
       const mc = maskCanvasRef.current;
-      
+
       if (lc && video && video.readyState >= 2) {
         const ctx = lc.getContext('2d');
         if (ctx) {
           if (lc.width !== video.videoWidth) lc.width = video.videoWidth;
           if (lc.height !== video.videoHeight) lc.height = video.videoHeight;
           ctx.clearRect(0, 0, lc.width, lc.height);
-          
+
           if (removeBackground && mc) {
             ctx.drawImage(mc, 0, 0, lc.width, lc.height);
           } else {
             ctx.save();
-            ctx.translate(lc.width, 0);
-            ctx.scale(-1, 1);
+            if (facingMode === 'user') {
+              ctx.translate(lc.width, 0);
+              ctx.scale(-1, 1);
+            }
             ctx.drawImage(video, 0, 0, lc.width, lc.height);
             ctx.restore();
-          }
-          
-          if (templateImg) {
-            ctx.drawImage(templateImg, 0, 0, lc.width, lc.height);
           }
         }
       }
       raf = requestAnimationFrame(draw);
     };
-    
+
     draw();
     return () => { running = false; cancelAnimationFrame(raf); };
-  }, [removeBackground, selectedTemplate]);
+  }, [removeBackground, facingMode]);
 
   const grabFrame = async (): Promise<string | null> => {
+    let raw: string | null = null;
+    let isMask = false;
+
     if (removeBackground && maskCanvasRef.current) {
-      return maskCanvasRef.current.toDataURL('image/png');
+      raw = maskCanvasRef.current.toDataURL('image/png');
+      isMask = true;
+    } else {
+      raw = webcamRef.current?.getScreenshot() || null;
     }
-    const raw = webcamRef.current?.getScreenshot();
+
     if (!raw) return null;
-    
+
     const img = new Image();
-    await new Promise(r => { img.onload = r; img.src = raw; });
+    await new Promise(r => { img.onload = r; img.src = raw!; });
+
     const c = document.createElement('canvas');
-    c.width = img.width; c.height = img.height;
+    c.width = img.width;
+    c.height = img.height;
     const ctx = c.getContext('2d')!;
-    ctx.translate(c.width, 0); ctx.scale(-1, 1);
+
+    if (!isMask && facingMode === 'user') {
+      ctx.translate(c.width, 0);
+      ctx.scale(-1, 1);
+    }
+
     ctx.drawImage(img, 0, 0);
     return c.toDataURL('image/png');
   };
@@ -184,6 +181,9 @@ export default function PhotoboothStudio() {
     setIsFlashing(true);
     setTimeout(() => setIsFlashing(false), 120);
   };
+
+  const capturedRef = useRef<string[]>([]);
+  const retakeIndexRef = useRef<number | null>(null);
 
   const startCaptureSequence = (startingPhotos: string[], forRetakeIndex: number | null) => {
     capturedRef.current = [...startingPhotos];
@@ -194,8 +194,7 @@ export default function PhotoboothStudio() {
         const stream = (liveCanvasRef.current as any).captureStream(30);
         const rec = new MediaRecorder(stream, { mimeType: 'video/webm' });
         rec.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data); };
-        rec.start(100);
-        setTimeout(() => { if (rec.state === 'recording') rec.pause(); }, 150);
+        rec.start(500);
         mediaRecorderRef.current = rec;
       } catch (e) { console.warn(e); }
     }
@@ -206,10 +205,8 @@ export default function PhotoboothStudio() {
   const runCountdownThenSnap = () => {
     const dur = timerDuration === 0 ? 0 : timerDuration;
 
-    if (mediaRecorderRef.current?.state === 'paused') mediaRecorderRef.current.resume();
-
     if (dur === 0) {
-      doSnap();
+      setTimeout(() => doSnap(), 300);
       return;
     }
 
@@ -230,12 +227,8 @@ export default function PhotoboothStudio() {
   const doSnap = async () => {
     flash();
 
-    setTimeout(() => {
-      if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.pause();
-    }, 400);
-
     const photo = await grabFrame();
-    if (!photo) return;
+    if (!photo) { setIsProcessing(false); return; }
 
     const ri = retakeIndexRef.current;
     if (ri !== null) {
@@ -245,7 +238,8 @@ export default function PhotoboothStudio() {
       setCapturedPhotos(updated);
       retakeIndexRef.current = null;
       setRetakeIndex(null);
-      finishComposite();
+      setAppPhase('review');
+      setIsProcessing(false);
     } else {
       capturedRef.current.push(photo);
       setCapturedPhotos([...capturedRef.current]);
@@ -255,7 +249,8 @@ export default function PhotoboothStudio() {
           runCountdownThenSnap();
         }, 1000);
       } else {
-        finishComposite();
+        setAppPhase('review');
+        setIsProcessing(false);
       }
     }
   };
@@ -263,13 +258,20 @@ export default function PhotoboothStudio() {
   const handleShutter = () => {
     if (isProcessing || countdown !== null) return;
     setIsProcessing(true);
+
+    if (retakeIndexRef.current !== null) {
+      startCaptureSequence(capturedPhotos, retakeIndexRef.current);
+      return;
+    }
+
     setCapturedPhotos([]);
     capturedRef.current = [];
     retakeIndexRef.current = null;
     setRetakeIndex(null);
+    setPreviewImage(null);
 
     if (mediaRecorderRef.current) {
-      try { mediaRecorderRef.current.stop(); } catch (_) {}
+      try { mediaRecorderRef.current.stop(); } catch (_) { }
       mediaRecorderRef.current = null;
     }
     recordedChunksRef.current = [];
@@ -280,9 +282,18 @@ export default function PhotoboothStudio() {
   const handleRetakeSingle = (index: number) => {
     setRetakeIndex(index);
     setAppPhase('capture');
-    setIsProcessing(true);
     retakeIndexRef.current = index;
-    startCaptureSequence(capturedPhotos, index);
+
+    if (timerDuration === 0) {
+      setIsProcessing(false);
+    } else {
+      setIsProcessing(true);
+      startCaptureSequence(capturedPhotos, index);
+    }
+  };
+
+  const handleConfirmReview = () => {
+    finishComposite();
   };
 
   const handleRetakeAll = () => {
@@ -291,11 +302,16 @@ export default function PhotoboothStudio() {
     setRetakeIndex(null);
     setAppPhase('capture');
     if (mediaRecorderRef.current) {
-      try { mediaRecorderRef.current.stop(); } catch (_) {}
+      try { mediaRecorderRef.current.stop(); } catch (_) { }
       mediaRecorderRef.current = null;
     }
     recordedChunksRef.current = [];
     setFinalVideoUrl(null);
+  };
+
+  const handleBackToReview = () => {
+    setAppPhase('review');
+    setFinalImage(null);
   };
 
   const detectSlots = (tplImg: HTMLImageElement, numSlots: number) => {
@@ -349,25 +365,13 @@ export default function PhotoboothStudio() {
     return slots;
   };
 
-  const finishComposite = async () => {
-    setIsProcessing(true);
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      if (mediaRecorderRef.current.state === 'paused') mediaRecorderRef.current.resume();
-      mediaRecorderRef.current.stop();
-      await new Promise(r => setTimeout(r, 600));
-      if (recordedChunksRef.current.length > 0) {
-        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-        setFinalVideoUrl(URL.createObjectURL(blob));
-      }
-      mediaRecorderRef.current = null;
-    }
-
-    if (!selectedTemplate) { setIsProcessing(false); return; }
+  const compositePhotos = async (template: typeof selectedTemplate, photos: string[], addWatermark: boolean = false): Promise<string | null> => {
+    if (!template) return null;
 
     const tplImg = new Image();
     tplImg.crossOrigin = 'anonymous';
-    await new Promise(r => { tplImg.onload = r; tplImg.src = selectedTemplate.url; });
+    await new Promise(r => { tplImg.onload = r; tplImg.onerror = r; tplImg.src = template.url; });
+    if (!tplImg.naturalWidth) return null;
 
     const W = tplImg.naturalWidth || 1200;
     const H = tplImg.naturalHeight || 1800;
@@ -376,14 +380,22 @@ export default function PhotoboothStudio() {
     const ctx = c.getContext('2d', { alpha: true })!;
     ctx.clearRect(0, 0, W, H);
 
-    const builtinSlots: Record<string, Array<{x:number;y:number;w:number;h:number}>> = {
-      'builtin-1': [{x:100, y:100, w:1000, h:1300}],
-      'builtin-2': [{x:60,  y:60,  w:1080, h:1660}],
-      'builtin-3': [{x:150, y:50,  w:900,  h:1700}],
-    };
-    const builtinHint = selectedTemplate?.id ? builtinSlots[selectedTemplate.id] : undefined;
+    // Get precise pixel data to map custom holes
+    ctx.drawImage(tplImg, 0, 0, W, H);
+    let tplData: Uint8ClampedArray | null = null;
+    try {
+      tplData = ctx.getImageData(0, 0, W, H).data;
+    } catch (e) {
+      console.warn("Could not read template pixel data", e);
+    }
+    ctx.clearRect(0, 0, W, H);
 
-    const photos = capturedRef.current;
+    const builtinSlots: Record<string, Array<{ x: number; y: number; w: number; h: number }>> = {
+      'builtin-1': [{ x: 100, y: 100, w: 1000, h: 1300 }],
+      'builtin-2': [{ x: 60, y: 60, w: 1080, h: 1660 }],
+      'builtin-3': [{ x: 150, y: 50, w: 900, h: 1700 }],
+    };
+    const builtinHint = template?.id ? builtinSlots[template.id] : undefined;
     const slots = builtinHint || detectSlots(tplImg, photos.length);
 
     for (let i = 0; i < photos.length; i++) {
@@ -397,16 +409,40 @@ export default function PhotoboothStudio() {
         const s = slots[i];
         slotX = s.x; slotY = s.y; slotW = s.w; slotH = s.h;
       } else {
-        const layout = selectedTemplate.layout || (selectedTemplate.isCustom ? 'strip-3' : 'single');
+        const layout = template.layout || (template.isCustom ? 'strip-3' : 'grid-4');
+        let qx = 0, qy = 0, qw = W, qh = H;
+        
         if (layout === 'single') {
-          slotX = 0; slotY = 0; slotW = W; slotH = H;
+          qx = 0; qy = 0; qw = W; qh = H;
         } else if (layout === 'strip-3') {
-          slotX = 0; slotY = Math.floor(i * H / 3); slotW = W; slotH = Math.floor(H / 3);
+          qx = 0; qy = Math.floor(i * H / 3); qw = W; qh = Math.floor(H / 3);
         } else {
-          slotX = (i % 2) * Math.floor(W / 2);
-          slotY = Math.floor(i / 2) * Math.floor(H / 2);
-          slotW = Math.floor(W / 2);
-          slotH = Math.floor(H / 2);
+          qx = (i % 2) * Math.floor(W / 2);
+          qy = Math.floor(i / 2) * Math.floor(H / 2);
+          qw = Math.floor(W / 2);
+          qh = Math.floor(H / 2);
+        }
+
+        slotX = qx; slotY = qy; slotW = qw; slotH = qh;
+
+        // Precise hole detection inside the quadrant to perfectly align the photo
+        if (tplData) {
+          let minX = W, minY = H, maxX = 0, maxY = 0;
+          let found = false;
+          for (let y = qy; y < qy + qh; y++) {
+            for (let x = qx; x < qx + qw; x++) {
+              if (tplData[(y * W + x) * 4 + 3] < 40) {
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+                found = true;
+              }
+            }
+          }
+          if (found) {
+            slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
+          }
         }
       }
 
@@ -430,12 +466,69 @@ export default function PhotoboothStudio() {
 
     ctx.drawImage(tplImg, 0, 0, W, H);
 
-    const finalData = c.toDataURL('image/png');
+    if (addWatermark) {
+      try {
+        const logoImg = new Image();
+        logoImg.crossOrigin = 'anonymous';
+        await new Promise((resolve, reject) => {
+          logoImg.onload = resolve;
+          logoImg.onerror = reject;
+          logoImg.src = '/President_University_Logo.png';
+        });
+        const wmWidth = W * 0.15;
+        const wmHeight = (logoImg.height / logoImg.width) * wmWidth;
+        const padding = W * 0.03;
+        ctx.globalAlpha = 0.8;
+        ctx.drawImage(logoImg, W - wmWidth - padding, H - wmHeight - padding, wmWidth, wmHeight);
+        ctx.globalAlpha = 1.0;
+      } catch (err) {
+        console.warn('Failed to load watermark logo', err);
+      }
+    }
+
+    return c.toDataURL('image/png');
+  };
+
+  const generatePreview = async (template: typeof selectedTemplate) => {
+    if (!template || capturedPhotos.length === 0) {
+      setPreviewImage(null);
+      return;
+    }
+    const result = await compositePhotos(template, capturedPhotos, false);
+    setPreviewImage(result);
+  };
+
+  useEffect(() => {
+    if (appPhase === 'review' && selectedTemplate && capturedPhotos.length > 0) {
+      generatePreview(selectedTemplate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTemplate, capturedPhotos, appPhase]);
+
+  const finishComposite = async () => {
+    setIsProcessing(true);
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      if (mediaRecorderRef.current.state === 'paused') mediaRecorderRef.current.resume();
+      mediaRecorderRef.current.stop();
+      await new Promise(r => setTimeout(r, 600));
+      if (recordedChunksRef.current.length > 0) {
+        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+        setFinalVideoUrl(URL.createObjectURL(blob));
+      }
+      mediaRecorderRef.current = null;
+    }
+
+    if (!selectedTemplate) { setIsProcessing(false); return; }
+
+    const finalData = await compositePhotos(selectedTemplate, capturedRef.current, true);
+    if (!finalData) { setIsProcessing(false); return; }
+
     setFinalImage(finalData);
 
     const id = Math.random().toString(36).slice(2, 10);
     setDownloadId(id);
-    try { localStorage.setItem(`snapbooth_photo_${id}`, finalData); } catch (_) {}
+    try { localStorage.setItem(`presuniv_booth_photo_${id}`, finalData); } catch (_) { }
 
     setAppPhase('result');
     setIsProcessing(false);
@@ -443,6 +536,7 @@ export default function PhotoboothStudio() {
 
   const resetAll = () => {
     setFinalImage(null);
+    setPreviewImage(null);
     setFinalVideoUrl(null);
     setCapturedPhotos([]);
     capturedRef.current = [];
@@ -451,7 +545,7 @@ export default function PhotoboothStudio() {
     setIsProcessing(false);
     setViewMode('photo');
     if (mediaRecorderRef.current) {
-      try { mediaRecorderRef.current.stop(); } catch (_) {}
+      try { mediaRecorderRef.current.stop(); } catch (_) { }
       mediaRecorderRef.current = null;
     }
     recordedChunksRef.current = [];
@@ -459,9 +553,35 @@ export default function PhotoboothStudio() {
 
   const handleDownload = () => {
     if (viewMode === 'video' && finalVideoUrl) {
-      const a = document.createElement('a'); a.href = finalVideoUrl; a.download = `snap-live-${Date.now()}.webm`; a.click();
+      const a = document.createElement('a'); a.href = finalVideoUrl; a.download = `PresUniv-Booth-Live-${Date.now()}.webm`; a.click();
     } else if (finalImage) {
-      const a = document.createElement('a'); a.href = finalImage; a.download = `snap-${Date.now()}.jpg`; a.click();
+      const a = document.createElement('a'); a.href = finalImage; a.download = `PresUniv-Booth-${Date.now()}.jpg`; a.click();
+    }
+  };
+
+  const handlePrint = () => {
+    if (!finalImage) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print Photobooth</title>
+            <style>
+              body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background: white; }
+              img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+              @media print {
+                @page { margin: 0; }
+                body { margin: 0; }
+              }
+            </style>
+          </head>
+          <body>
+            <img src="${finalImage}" onload="window.print(); window.close();" />
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
     }
   };
 
@@ -504,7 +624,7 @@ export default function PhotoboothStudio() {
       const y = (ph - fh) / 2;
 
       pdf.addImage(finalImage, 'JPEG', x, y, fw, fh, undefined, 'FAST');
-      pdf.save(`snapbooth-${Date.now()}.pdf`);
+      pdf.save(`PresUniv-Booth-${Date.now()}.pdf`);
     } catch (err) {
       console.error(err);
       alert('Gagal membuat PDF.');
@@ -516,177 +636,212 @@ export default function PhotoboothStudio() {
   };
 
   const activeTemplates = templates.filter(t => t.active);
+  const gridTemplates = activeTemplates.filter(t => {
+    const tLayout = t.layout || (t.isCustom ? 'strip-3' : 'single');
+    return tLayout === 'grid-4';
+  });
   const shotLabel = retakeIndex !== null
     ? `Ulang Foto ${retakeIndex + 1} dari ${requiredPhotos}`
     : `Foto ${capturedPhotos.length + 1} dari ${requiredPhotos}`;
 
-    return (
-    <div className="w-full flex-1 min-h-0 flex flex-col items-center bg-[#efefef] p-4 lg:p-8">
+  return (
+    <div className="w-full h-screen flex flex-col lg:flex-row items-center justify-center bg-black lg:bg-gradient-to-br lg:from-[#00205B] lg:via-[#00153D] lg:to-[#8A1538] p-0 lg:p-6 relative overflow-hidden font-sans">
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" strategy="lazyOnload" />
 
       <canvas ref={liveCanvasRef} className="hidden" />
 
-      <div className="relative w-full max-w-5xl flex-1 bg-white rounded-3xl overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] flex flex-col border border-gray-100">
+      <div className="hidden lg:flex w-full lg:w-1/3 p-12 flex-col justify-center text-white z-10 text-left">
+        <div className="mb-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/President_University_Logo.png" alt="President University Logo" className="w-32 h-auto drop-shadow-lg" />
+        </div>
+        <h1 className="text-6xl font-extrabold tracking-tight mb-2 drop-shadow-xl">
+          PresUniv<br /><span className="text-[#FDB813]">Booth.</span>
+        </h1>
+        <p className="text-lg text-white/80 drop-shadow mb-0 font-medium">
+          Where Tomorrow&apos;s Leaders Make Memories.
+        </p>
+      </div>
 
-        <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/60 to-transparent z-40 pointer-events-none flex flex-col sm:flex-row justify-between items-start p-4 sm:p-5 gap-3">
-          <span className="text-white/90 font-semibold tracking-tight text-lg drop-shadow-md">SnapBooth</span>
+      <div className="relative w-full h-full lg:w-2/3 lg:max-h-[90vh] flex-1 lg:bg-white lg:rounded-3xl overflow-hidden lg:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col lg:border lg:border-white/20 z-10">
+
+        {appPhase === 'capture' && (
+          <>
+            <div className="lg:hidden absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-[#00205B]/90 via-[#00205B]/40 to-transparent z-20 pointer-events-none" />
+            <div className="lg:hidden absolute bottom-0 inset-x-0 h-64 bg-gradient-to-t from-[#8A1538]/90 via-[#8A1538]/40 to-transparent z-20 pointer-events-none" />
+          </>
+        )}
+
+        <div className="lg:hidden absolute top-6 left-5 z-40 flex items-center gap-3 pointer-events-none">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/President_University_Logo.png" alt="Logo" className="w-9 h-auto drop-shadow-lg" />
+          <h1 className="text-xl font-extrabold tracking-tight text-white drop-shadow-md">
+            PresUniv<span className="text-[#FDB813]">.</span>
+          </h1>
+        </div>
+
+        <div className="absolute top-0 right-0 lg:inset-x-0 lg:bg-gradient-to-b lg:from-black/80 lg:to-transparent z-40 pointer-events-none flex flex-col lg:flex-row justify-end lg:justify-between items-end lg:items-start p-5 gap-3">
+          <span className="hidden lg:block text-white font-bold tracking-widest text-sm uppercase drop-shadow-md">President University</span>
 
           {appPhase === 'capture' && (
-            <div className="flex flex-wrap gap-2 pointer-events-auto">
-              <button onClick={cycleTimer} className="h-9 px-3 flex items-center gap-1.5 rounded-full bg-black/20 backdrop-blur-md text-white border border-white/20 hover:bg-black/40 text-sm font-medium">
-                <Timer size={14} /> <span className="hidden sm:inline">{timerDuration === 0 ? 'Mati' : `${timerDuration}s`}</span>
-                <span className="sm:hidden">{timerDuration === 0 ? '0s' : `${timerDuration}s`}</span>
+            <div className="flex flex-col lg:flex-row gap-3 pointer-events-auto mt-14 lg:mt-0">
+              <button onClick={cycleTimer} className="h-10 lg:h-9 px-3 flex items-center gap-2 rounded-full bg-black/40 backdrop-blur-md text-white border border-white/30 hover:bg-black/60 shadow-lg text-sm font-medium transition-all">
+                <Timer size={16} /> <span>{timerDuration === 0 ? 'Off' : `${timerDuration}s`}</span>
               </button>
-              <button
-                onClick={() => setLivePhotoEnabled(v => !v)}
-                className={`h-9 px-3 flex items-center gap-1.5 rounded-full backdrop-blur-md text-sm font-medium transition-colors border border-white/20 ${livePhotoEnabled ? 'bg-yellow-400 text-black border-transparent' : 'bg-black/20 text-white hover:bg-black/40'}`}
-              >
-                <Video size={14} /> <span className="hidden sm:inline">{livePhotoEnabled ? 'Live' : 'Live Off'}</span>
-              </button>
-
-              <button
-                onClick={() => setFacingMode(m => m === 'user' ? 'environment' : 'user')}
-                className="w-9 h-9 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-md text-white border border-white/20 hover:bg-black/40"
-              >
-                <RefreshCcw size={16} />
+              <button onClick={() => setFacingMode(m => m === 'user' ? 'environment' : 'user')} className="w-10 h-10 lg:w-9 lg:h-9 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white border border-white/30 hover:bg-black/60 shadow-lg transition-all">
+                <RefreshCcw size={18} />
               </button>
             </div>
           )}
         </div>
 
-        <div className="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col">
+        <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 bg-black overflow-hidden flex flex-col z-0 lg:z-10">
 
-          {appPhase === 'capture' && (
-            <>
-              <Webcam
-                ref={webcamRef}
-                audio={false}
-                mirrored={true}
-                screenshotFormat="image/png"
-                videoConstraints={{ facingMode, width: 1280, height: 960 }}
-                className={`w-full h-full object-cover ${removeBackground ? 'opacity-0 absolute inset-0' : ''}`}
-              />
+          {/* Capture Container (Displays native hardware aspect ratio) */}
+          <div 
+            className={`absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden bg-black transition-opacity duration-300 ${appPhase === 'capture' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'}`} 
+          >
+            <Webcam
+              ref={webcamRef}
+              audio={false}
+              mirrored={facingMode === 'user'}
+              screenshotFormat="image/png"
+              videoConstraints={{ facingMode, width: 1280, height: 960 }}
+              className={`w-full h-full object-contain ${(appPhase !== 'capture' || removeBackground) ? 'opacity-0' : ''}`}
+            />
 
-              <canvas
-                ref={maskCanvasRef}
-                width={1280}
-                height={960}
-                className={`absolute inset-0 w-full h-full object-cover ${removeBackground ? 'z-10' : 'hidden'}`}
-              />
+            <canvas
+              ref={maskCanvasRef}
+              width={1280}
+              height={960}
+              className={`absolute inset-0 w-full h-full object-contain ${(appPhase === 'capture' && removeBackground) ? 'opacity-100' : 'opacity-0'}`}
+            />
 
-              {selectedTemplate?.url && (
-                <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
-                  <img
-                    src={selectedTemplate.url}
-                    alt="frame guide"
-                    className="absolute inset-0 w-full h-full object-cover opacity-70"
-                    style={{ mixBlendMode: 'normal' }}
-                  />
-                  <div className="absolute inset-0" style={{
-                    background: 'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.25) 100%)'
-                  }} />
-                </div>
-              )}
+            {appPhase === 'capture' && countdown !== null && (
+              <div className="absolute inset-0 z-30 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center">
+                <div className="text-[11rem] font-bold text-white drop-shadow-[0_0_25px_rgba(253,184,19,0.5)] leading-none">{countdown}</div>
+                <div className="mt-4 bg-[#8A1538] text-white text-sm font-bold px-5 py-2 rounded-full border border-white/20 shadow-lg">{shotLabel}</div>
+              </div>
+            )}
 
-              {countdown !== null && (
-                <div className="absolute inset-0 z-30 bg-black/30 backdrop-blur-sm flex flex-col items-center justify-center">
-                  <div className="text-[11rem] font-bold text-white drop-shadow-lg leading-none">{countdown}</div>
-                  <div className="mt-4 bg-black/50 text-white text-sm font-medium px-4 py-1.5 rounded-full">{shotLabel}</div>
-                </div>
-              )}
-
+            {appPhase === 'capture' && (
               <div className={`absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-75 ${isFlashing ? 'opacity-100' : 'opacity-0'}`} />
-            </>
-          )}
+            )}
+          </div>
 
-          {appPhase === 'result' && finalImage && (
-            <div className="w-full flex-1 min-h-0 bg-gray-50 z-30 flex flex-col p-4 sm:p-6 overflow-y-auto">
-              <div className="flex-1 min-h-0 relative w-full flex items-center justify-center drop-shadow-xl">
-                {viewMode === 'video' && finalVideoUrl
-                  ? <video src={finalVideoUrl} autoPlay loop muted playsInline className="max-h-full max-w-full object-contain rounded-xl shadow-lg" />
-                  : <img src={finalImage} alt="Hasil" className="max-h-full max-w-full object-contain rounded-xl shadow-lg" />
-                }
-                {finalVideoUrl && (
-                  <div className="absolute top-3 right-3 flex bg-black/60 backdrop-blur-md rounded-full p-1 shadow-lg">
-                    <button onClick={() => setViewMode('photo')} className={`p-2 rounded-full ${viewMode === 'photo' ? 'bg-white text-black' : 'text-white'}`}><ImageIcon size={14} /></button>
-                    <button onClick={() => setViewMode('video')} className={`p-2 rounded-full ${viewMode === 'video' ? 'bg-white text-black' : 'text-white'}`}><Play size={14} /></button>
+          {appPhase === 'review' && capturedPhotos.length > 0 && (
+            <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 lg:bg-gray-50 bg-black/95 backdrop-blur-md z-30 flex flex-col p-4 sm:p-6 overflow-y-auto">
+
+              <div className="flex-1 min-h-0 relative w-full flex items-center justify-center mb-4">
+                {previewImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={previewImage} alt="Preview" className="max-h-full max-w-full object-contain rounded-xl shadow-2xl border-2 border-white/20 lg:border-gray-200" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center gap-3 py-10">
+                    <ImageIcon size={48} className="text-white/30 lg:text-gray-300" />
+                    <p className="text-sm font-bold lg:text-gray-400 text-white/50">Pilih frame di bawah untuk melihat preview</p>
                   </div>
                 )}
               </div>
 
-              <div className="mt-6 flex flex-col items-center">
-                <p className="text-sm font-semibold text-gray-500 mb-3 text-center">Ada yang kurang pas? Klik foto untuk mengulang</p>
-                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
-                  {capturedPhotos.map((photo, i) => (
-                    <button key={i} onClick={() => handleRetakeSingle(i)} className="relative group w-16 h-20 sm:w-20 sm:h-28 rounded-xl overflow-hidden border-2 border-white shadow-md hover:border-black hover:shadow-xl transition-all flex-shrink-0">
-                      <img src={photo} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white">
-                        <RotateCcw size={16} />
-                        <span className="text-[10px] font-bold mt-1">Ulang {i + 1}</span>
+              <div className="flex gap-2 overflow-x-auto pb-2 mb-3 snap-x custom-scrollbar justify-center">
+                {gridTemplates.map(tpl => (
+                  <button
+                    key={tpl.id}
+                    onClick={() => setSelectedTemplate(tpl)}
+                    className={`relative flex-shrink-0 w-14 h-20 sm:w-16 sm:h-22 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 snap-center
+                      ${selectedTemplate?.id === tpl.id ? 'border-[#FDB813] shadow-[0_0_12px_rgba(253,184,19,0.6)]' : 'border-white/30 lg:border-gray-200'}`}
+                  >
+                    {tpl.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={tpl.url} alt={tpl.name} className="w-full h-full object-contain p-0.5" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs text-white/50">Wait</div>
+                    )}
+                    {selectedTemplate?.id === tpl.id && (
+                      <div className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#FDB813] rounded-full flex items-center justify-center shadow-md">
+                        <Check size={9} color="#00205B" strokeWidth={3} />
                       </div>
-                    </button>
-                  ))}
-                </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3">
+                {capturedPhotos.map((photo, i) => (
+                  <button key={i} onClick={() => handleRetakeSingle(i)} className="relative group w-12 h-16 sm:w-14 sm:h-18 rounded-lg overflow-hidden border-2 border-white/20 lg:border-gray-200 shadow-sm hover:border-[#8A1538] hover:shadow-lg transition-all flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-[#8A1538]/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white backdrop-blur-sm">
+                      <RotateCcw size={14} />
+                      <span className="text-[8px] font-bold">Ulang</span>
+                    </div>
+                    <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold text-center py-px">Foto {i + 1}</div>
+                  </button>
+                ))}
+                <button onClick={handleRetakeAll} className="w-12 h-16 sm:w-14 sm:h-18 rounded-lg border-2 border-dashed border-red-400/50 flex flex-col items-center justify-center text-red-300 lg:text-red-400 hover:border-red-400 hover:bg-red-500/10 transition-all flex-shrink-0">
+                  <RotateCcw size={14} />
+                  <span className="text-[7px] font-bold mt-0.5">Ulang<br />Semua</span>
+                </button>
+              </div>
+
+              <div className="flex justify-center">
+                <button onClick={handleConfirmReview} disabled={isProcessing || !selectedTemplate || !previewImage} className="h-11 px-8 rounded-full bg-gradient-to-r from-[#00205B] to-[#8A1538] text-white flex items-center gap-2 text-sm font-extrabold shadow-xl hover:shadow-2xl transition-all disabled:opacity-40">
+                  {isProcessing ? 'Memproses...' : <><Download size={16} /> Simpan Hasil</>}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {appPhase === 'result' && finalImage && (
+            <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 lg:bg-gray-50 bg-black/95 backdrop-blur-md z-30 flex flex-col p-4 sm:p-6 pb-48 lg:pb-6 overflow-y-auto">
+              <div className="flex-1 min-h-0 relative w-full flex items-center justify-center drop-shadow-xl mt-10 lg:mt-0">
+                {viewMode === 'video' && finalVideoUrl
+                  ? <video src={finalVideoUrl} autoPlay loop muted playsInline className="max-h-full max-w-full object-contain rounded-xl shadow-2xl border-4 border-white lg:border-white border-white/20" />
+                  // eslint-disable-next-line @next/next/no-img-element
+                  : <img src={finalImage} alt="Hasil" className="max-h-full max-w-full object-contain rounded-xl shadow-2xl border-4 border-white lg:border-white border-white/20" />
+                }
+                {finalVideoUrl && (
+                  <div className="absolute top-3 right-3 flex bg-black/60 backdrop-blur-md rounded-full p-1 shadow-lg">
+                    <button onClick={() => setViewMode('photo')} className={`p-2 rounded-full transition-colors ${viewMode === 'photo' ? 'bg-[#FDB813] text-black' : 'text-white'}`}><ImageIcon size={14} /></button>
+                    <button onClick={() => setViewMode('video')} className={`p-2 rounded-full transition-colors ${viewMode === 'video' ? 'bg-[#FDB813] text-black' : 'text-white'}`}><Play size={14} /></button>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        <div className="h-auto min-h-[9rem] bg-white border-t border-gray-100 px-4 sm:px-5 py-4 flex flex-col sm:flex-row items-center gap-4 relative z-40">
+        <div className="absolute bottom-0 inset-x-0 lg:relative lg:bottom-auto lg:inset-x-auto h-auto min-h-[9rem] lg:bg-white bg-transparent lg:border-t lg:border-gray-100 px-4 sm:px-5 pb-8 pt-4 lg:py-4 flex items-center justify-center gap-4 z-40 pointer-events-none">
 
-          {appPhase === 'capture' && (
-            <div className="w-full sm:flex-1 flex gap-2 overflow-x-auto items-center pb-2 sm:pb-0 pr-0 sm:pr-4 snap-x">
-              {activeTemplates.map(tpl => (
-                <button
-                  key={tpl.id}
-                  onClick={() => setSelectedTemplate(tpl)}
-                  className={`relative flex-shrink-0 w-14 h-20 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 snap-center
-                    ${selectedTemplate?.id === tpl.id ? 'border-black shadow-md' : 'border-gray-200'}`}
-                >
-                  {tpl.url ? (
-                    <img src={tpl.url} alt={tpl.name} className="w-full h-full object-contain p-0.5" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Memuat</div>
-                  )}
-                  {selectedTemplate?.id === tpl.id && (
-                    <div className="absolute top-1 right-1 w-4 h-4 bg-black rounded-full flex items-center justify-center">
-                      <Check size={9} color="white" strokeWidth={3} />
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className={`flex flex-wrap items-center gap-2 sm:gap-3 ${appPhase === 'capture' ? 'w-full sm:w-auto sm:ml-auto justify-center' : 'w-full justify-center'}`}>
+          <div className={`flex flex-col lg:flex-row items-center gap-2 sm:gap-3 pointer-events-auto ${appPhase === 'capture' ? 'w-full items-center justify-center' : 'w-full justify-center flex-wrap flex-row'}`}>
 
             {appPhase === 'capture' && (
-              <button
-                onClick={handleShutter}
-                disabled={isProcessing || countdown !== null}
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-[5px] border-gray-200 bg-white shadow flex items-center justify-center disabled:opacity-40 hover:border-gray-300 transition-colors flex-shrink-0"
-              >
-                <div className="w-[44px] h-[44px] sm:w-[56px] sm:h-[56px] rounded-full bg-black hover:scale-95 transition-transform" />
-              </button>
+              <div className="flex flex-col items-center">
+                <p className="lg:hidden text-white/90 text-[10px] font-bold tracking-widest drop-shadow-md mb-3 text-center pointer-events-none">
+                  WHERE TOMORROW&apos;S LEADERS MAKE MEMORIES.
+                </p>
+
+                <button onClick={handleShutter} disabled={isProcessing || countdown !== null} className="w-16 h-16 lg:w-20 lg:h-20 rounded-full border-[5px] border-white/80 lg:border-gray-200 bg-white/20 lg:bg-white shadow-xl flex items-center justify-center disabled:opacity-40 hover:border-[#FDB813] lg:hover:border-[#8A1538] transition-colors flex-shrink-0 group backdrop-blur-sm lg:backdrop-blur-none">
+                  <div className="w-[46px] h-[46px] lg:w-[56px] lg:h-[56px] rounded-full bg-gradient-to-br from-[#8A1538] to-[#600e26] group-hover:scale-95 transition-transform shadow-inner" />
+                </button>
+              </div>
             )}
 
             {appPhase === 'result' && (
               <>
-                <button onClick={resetAll} className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 flex-shrink-0" title="Batal & Mulai Baru">
-                  <X size={18} />
+                <button onClick={handleBackToReview} disabled={isProcessing} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-gray-100 bg-white/20 backdrop-blur-md lg:text-[#00205B] text-white lg:hover:bg-gray-200 hover:bg-white/30 flex items-center gap-1.5 text-xs sm:text-sm font-bold transition-colors flex-shrink-0 border border-transparent lg:border-none border-white/30 shadow-lg lg:shadow-none">
+                  <ArrowRight size={14} className="rotate-180 sm:w-4 sm:h-4" /> Ganti Template
                 </button>
-                <button onClick={handleRetakeAll} disabled={isProcessing} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 flex items-center gap-1.5 text-xs sm:text-sm font-semibold transition-colors flex-shrink-0">
+                <button onClick={handleRetakeAll} disabled={isProcessing} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-red-50 bg-red-500/20 backdrop-blur-md lg:text-[#8A1538] text-red-100 lg:hover:bg-red-100 hover:bg-red-500/40 flex items-center gap-1.5 text-xs sm:text-sm font-bold transition-colors flex-shrink-0 border border-transparent lg:border-none border-red-400/30">
                   <RotateCcw size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Ulangi Semua</span>
                   <span className="sm:hidden">Ulang Semua</span>
                 </button>
-                <button onClick={handleDownload} className="btn-primary h-10 sm:h-12 px-4 sm:px-6 rounded-full flex items-center gap-1.5 text-xs sm:text-sm font-semibold shadow flex-shrink-0">
-                  <Download size={14} className="sm:w-4 sm:h-4" /> Simpan {viewMode === 'video' && finalVideoUrl ? 'Video' : 'Foto'}
+                <button onClick={handleDownload} className="lg:bg-[#00205B] bg-[#FDB813] lg:hover:bg-[#00153D] hover:bg-[#e0a210] lg:text-white text-[#00205B] h-10 sm:h-12 px-4 sm:px-6 rounded-full flex items-center gap-1.5 text-xs sm:text-sm font-extrabold shadow-xl flex-shrink-0 transition-colors">
+                  <Download size={14} className="sm:w-4 sm:h-4" /> Simpan Foto
                 </button>
-                <button onClick={() => setShowQR(true)} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center gap-1.5 text-xs sm:text-sm font-medium flex-shrink-0">
-                  <QrCode size={14} className="sm:w-4 sm:h-4" /> QR
-                </button>
-                <button onClick={handlePDF} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center gap-1.5 text-xs sm:text-sm font-medium flex-shrink-0">
-                  <Printer size={14} className="sm:w-4 sm:h-4" /> PDF
+                <button onClick={handlePrint} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-gray-100 bg-white/20 backdrop-blur-md lg:hover:bg-gray-200 flex items-center gap-1.5 text-xs sm:text-sm font-bold lg:text-[#00205B] text-white flex-shrink-0 transition-colors border border-transparent lg:border-none border-white/30 shadow-lg lg:shadow-none">
+                  <Printer size={14} className="sm:w-4 sm:h-4" /> Print
                 </button>
               </>
             )}
@@ -695,16 +850,16 @@ export default function PhotoboothStudio() {
       </div>
 
       {showQR && finalImage && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 lg:bg-[#00205B]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white p-10 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full relative">
-            <button onClick={() => setShowQR(false)} className="absolute top-5 right-5 w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center">
+            <button onClick={() => setShowQR(false)} className="absolute top-5 right-5 w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-500">
               <X size={18} />
             </button>
-            <h3 className="text-xl font-bold mb-6">Scan & Download</h3>
+            <h3 className="text-xl font-extrabold text-[#00205B] mb-6">Scan & Download</h3>
             <div className="p-3 bg-white border border-gray-200 rounded-2xl shadow-sm mb-6">
-              <QRCodeSVG value={`${hostUrl}/d/${downloadId}`} size={200} />
+              <QRCodeSVG value={`${hostUrl}/d?id=${downloadId}`} size={200} fgColor="#00205B" />
             </div>
-            <p className="text-xs text-center text-gray-500 leading-relaxed">Scan kode QR dengan kamera HP Anda untuk mengunduh foto.</p>
+            <p className="text-xs text-center text-gray-500 font-medium leading-relaxed">Scan kode QR dengan kamera HP Anda untuk mengunduh foto ke device masing-masing.</p>
           </div>
         </div>
       )}

@@ -1,28 +1,30 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
 import { Download, AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DownloadPage() {
-  const params = useParams();
-  const router = useRouter();
-  const id = params?.id as string;
-  
+  const [id, setId] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!id) {
+    // Read ID from URL parameter (e.g., ?id=123)
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramId = urlParams.get('id');
+
+    if (!paramId) {
       setError('ID Foto tidak valid');
       setIsLoading(false);
       return;
     }
+    setId(paramId);
 
     // Attempt to load from localStorage (Simulating backend retrieval)
-    const data = localStorage.getItem(`snapbooth_photo_${id}`);
+    const data = localStorage.getItem(`presuniv_booth_photo_${paramId}`);
+
     
     if (data) {
       setPhotoUrl(data);
@@ -37,7 +39,7 @@ export default function DownloadPage() {
     if (!photoUrl) return;
     const a = document.createElement('a');
     a.href = photoUrl;
-    a.download = `snapbooth-${Date.now()}.jpg`;
+    a.download = `PresUniv-Booth-${Date.now()}.jpg`;
     a.click();
   };
 

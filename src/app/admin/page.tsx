@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { Trash2, Upload, Plus, AlertCircle, ArrowLeft, Lock } from 'lucide-react';
 import Link from 'next/link';
-
 export default function AdminPage() {
   const { templates, fetchGlobalTemplates } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -16,7 +15,7 @@ export default function AdminPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [removeBlack, setRemoveBlack] = useState(true);
-  const [selectedLayout, setSelectedLayout] = useState<'single' | 'strip-3' | 'grid-4'>('single');
+  const [selectedLayout, setSelectedLayout] = useState<'single' | 'strip-3' | 'grid-4'>('grid-4');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -35,22 +34,42 @@ export default function AdminPage() {
     }
   };
 
-  const processImageRemovingBlack = (dataUrl: string): Promise<string> => {
+  const processImageRemovingBlack = async (dataUrl: string, applyRemove: boolean): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         if (!ctx) return resolve(dataUrl);
-        ctx.drawImage(img, 0, 0);
+
+        // Downscale large images (max 1080px width) to avoid 500 server payload errors
+        let targetWidth = img.width;
+        let targetHeight = img.height;
+        const MAX_WIDTH = 1080;
+        
+        if (targetWidth > MAX_WIDTH) {
+          const ratio = MAX_WIDTH / targetWidth;
+          targetWidth = MAX_WIDTH;
+          targetHeight = Math.floor(img.height * ratio);
+        }
+
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        
+        // Use better quality for downscaling
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+        if (!applyRemove) {
+          return resolve(canvas.toDataURL('image/png', 0.9));
+        }
 
         try {
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
           const data = imageData.data;
-          const W = canvas.width;
-          const H = canvas.height;
+          const W = targetWidth;
+          const H = targetHeight;
 
           // Only pixels that are very dark qualify as "black slot"
           const isBlack = (x: number, y: number) => {
@@ -115,9 +134,9 @@ export default function AdminPage() {
 
     const file = files[0];
 
-    // Enforce 2MB limit for Netlify Functions payload
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Ukuran file maksimal 2MB.');
+    // Enforce 5MB limit for localStorage
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Ukuran file maksimal 5MB.');
       setIsUploading(false);
       return;
     }
@@ -126,13 +145,17 @@ export default function AdminPage() {
     reader.onload = async (event) => {
       let dataUrl = event.target?.result as string;
 
-      if (removeBlack) {
-        try { dataUrl = await processImageRemovingBlack(dataUrl); }
-        catch (err) { console.error('Failed to remove black bg', err); }
+      try {
+        // Always process image to downscale it to max 1080p, passing removeBlack flag
+        dataUrl = await processImageRemovingBlack(dataUrl, removeBlack);
+      } catch (err) {
+        console.error('Failed to process image', err);
+        setError('Gagal memproses gambar. Format mungkin tidak didukung.');
+        setIsUploading(false);
+        return;
       }
 
       const id = `custom-${Date.now()}`;
-
       try {
         const res = await fetch('/api/templates', {
           method: 'POST',
@@ -145,12 +168,15 @@ export default function AdminPage() {
           })
         });
 
-        if (!res.ok) throw new Error('Failed to save on server');
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData?.detail || errData?.error || `Server error ${res.status}`);
+        }
         
         await fetchGlobalTemplates();
-      } catch (err) {
+      } catch (err: any) {
         console.error('Upload failed', err);
-        setError('Gagal mengunggah template ke server.');
+        setError(`Gagal menyimpan template: ${err?.message || err}`);
       } finally {
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -283,7 +309,7 @@ export default function AdminPage() {
             {isUploading && (
               <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm flex items-center gap-2 text-gray-600">
                 <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
-                Mengunggah ke server...
+                Menyimpan template...
               </div>
             )}
 
