@@ -915,12 +915,12 @@ export default function PhotoboothStudio() {
 
             {/* Template Selector Overlay during Capture (Vertikal Sidebar Kanan) */}
             {appPhase === 'capture' && countdown === null && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center max-h-[75%]">
-                <div className="bg-black/50 backdrop-blur-md px-3 py-4 rounded-3xl border border-white/20 shadow-2xl flex flex-col h-full">
-                  <div className="text-white/80 text-[10px] font-bold text-center mb-4 uppercase tracking-wider">Frame</div>
+              <div className="absolute right-3 top-[120px] z-40 flex flex-col items-center">
+                <div className="bg-black/50 backdrop-blur-md px-3 py-3 rounded-3xl border border-white/20 shadow-2xl flex flex-col">
+                  <div className="text-white/80 text-[10px] font-bold text-center mb-2 uppercase tracking-wider">Frame</div>
                   
-                  {/* Container scroll vertikal */}
-                  <div className="flex flex-col gap-3 overflow-y-auto snap-y custom-scrollbar items-center pb-2 pr-1">
+                  {/* Container scroll vertikal dibatasi maksimal 4 frame */}
+                  <div className="flex flex-col gap-2.5 overflow-y-auto snap-y custom-scrollbar items-center pb-1 pr-1 max-h-[340px]">
                     {activeTemplates.map(tpl => (
                       <button
                         key={tpl.id}
