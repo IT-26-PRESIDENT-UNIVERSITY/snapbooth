@@ -790,7 +790,7 @@ export default function PhotoboothStudio() {
           <span className="hidden lg:block text-white font-bold tracking-widest text-sm uppercase drop-shadow-md">President University</span>
 
           {appPhase === 'capture' && (
-            <div className="flex flex-col lg:flex-row gap-3 pointer-events-auto mt-14 lg:mt-0">
+            <div className="flex flex-row items-center gap-2 pointer-events-auto mt-2 lg:mt-0">
               <button onClick={cycleTimer} className="h-10 lg:h-9 px-3 flex items-center gap-2 rounded-full bg-black/40 backdrop-blur-md text-white border border-white/30 hover:bg-black/60 shadow-lg text-sm font-medium transition-all">
                 <Timer size={16} /> <span>{timerDuration === 0 ? 'Off' : `${timerDuration}s`}</span>
               </button>
@@ -890,12 +890,12 @@ export default function PhotoboothStudio() {
 
             {/* Template Selector Overlay during Capture (Vertikal Sidebar Kanan) */}
             {appPhase === 'capture' && countdown === null && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center max-h-[75%]">
-                <div className="bg-black/50 backdrop-blur-md px-3 py-4 rounded-3xl border border-white/20 shadow-2xl flex flex-col h-full">
-                  <div className="text-white/80 text-[10px] font-bold text-center mb-4 uppercase tracking-wider">Frame</div>
+              <div className="absolute right-3 top-[120px] z-40 flex flex-col items-center">
+                <div className="bg-black/50 backdrop-blur-md px-3 py-3 rounded-3xl border border-white/20 shadow-2xl flex flex-col">
+                  <div className="text-white/80 text-[10px] font-bold text-center mb-2 uppercase tracking-wider">Frame</div>
                   
-                  {/* Container scroll vertikal */}
-                  <div className="flex flex-col gap-3 overflow-y-auto snap-y custom-scrollbar items-center pb-2 pr-1">
+                  {/* Container scroll vertikal dibatasi maksimal 4 frame */}
+                  <div className="flex flex-col gap-2.5 overflow-y-auto snap-y custom-scrollbar items-center pb-1 pr-1 max-h-[340px]">
                     {activeTemplates.map(tpl => (
                       <button
                         key={tpl.id}
