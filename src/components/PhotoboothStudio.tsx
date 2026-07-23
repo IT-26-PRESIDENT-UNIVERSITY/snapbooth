@@ -67,6 +67,45 @@ const detectSlots = (tplImg: HTMLImageElement) => {
   return slots;
 };
 
+const enforceExpectedSlots = (slots: {x: number, y: number, w: number, h: number}[], layout: string, W: number, H: number) => {
+  if (layout !== 'strip-4' && layout !== 'strip-3') return slots;
+  const expectedCount = layout === 'strip-4' ? 4 : 3;
+  if (slots.length === expectedCount) return slots;
+  
+  // If detectSlots failed to find exactly 4 (e.g. they merged into 1 giant hole because the border was transparent too)
+  // We take the overall bounding box of what it DID find and strictly divide it into equal vertical pieces!
+  if (slots.length > 0) {
+    const minX = Math.min(...slots.map(s => s.x));
+    const minY = Math.min(...slots.map(s => s.y));
+    const maxX = Math.max(...slots.map(s => s.x + s.w));
+    const maxY = Math.max(...slots.map(s => s.y + s.h));
+    const totalW = maxX - minX;
+    const totalH = maxY - minY;
+    const newSlots = [];
+    for (let i = 0; i < expectedCount; i++) {
+      newSlots.push({
+        x: minX,
+        y: minY + Math.floor(i * (totalH / expectedCount)),
+        w: totalW,
+        h: Math.floor(totalH / expectedCount)
+      });
+    }
+    return newSlots;
+  }
+  
+  // If 0 slots (completely opaque), fallback to dividing the entire template canvas (excluding headers if we could, but we can't here, so full canvas)
+  const newSlots = [];
+  for (let i = 0; i < expectedCount; i++) {
+    newSlots.push({
+      x: 0,
+      y: Math.floor(i * (H / expectedCount)),
+      w: W,
+      h: Math.floor(H / expectedCount)
+    });
+  }
+  return newSlots;
+};
+
 const applyAspectRatio = (slots: {x: number, y: number, w: number, h: number}[], aspectRatioStr?: string) => {
   if (!aspectRatioStr) return slots;
   const parts = aspectRatioStr.split(':');
@@ -215,6 +254,7 @@ export default function PhotoboothStudio() {
         }
       } else {
         finalSlots = detectSlots(img);
+        finalSlots = enforceExpectedSlots(finalSlots, layout, W, H);
         if (finalSlots.length === 0) {
           finalSlots = [{x: 0, y: 0, w: W, h: H}];
         }
@@ -538,6 +578,7 @@ export default function PhotoboothStudio() {
         }
       } else {
         slots = detectSlots(tplImg);
+        slots = enforceExpectedSlots(slots, layout, W, H);
         if (slots.length === 0) {
           slots = [{x: 0, y: 0, w: W, h: H}];
         }
