@@ -16,6 +16,7 @@ const defaultTemplates: Template[] = [
   { id: 'builtin-1', name: 'Polaroid Classic', url: '/templates/polaroid.svg', isCustom: false, active: true, layout: 'single' },
   { id: 'builtin-2', name: 'Neon Cyberpunk', url: '/templates/neon.svg', isCustom: false, active: true, layout: 'single' },
   { id: 'builtin-3', name: 'Vintage Film', url: '/templates/vintage.svg', isCustom: false, active: true, layout: 'single' },
+  { id: 'builtin-4', name: 'FAISM Pixel', url: '/templates/photostrip-pixel-v3.png', isCustom: false, active: true, layout: 'grid-4' },
 ];
 
 interface PhotoboothState {

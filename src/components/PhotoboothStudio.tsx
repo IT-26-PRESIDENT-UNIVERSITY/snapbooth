@@ -24,8 +24,8 @@ export default function PhotoboothStudio() {
   } = useStore();
 
   const webcamRef = useRef<Webcam>(null);
-  const maskCanvasRef = useRef<HTMLCanvasElement>(null);   // AI mask output
-  const liveCanvasRef = useRef<HTMLCanvasElement>(null);   // hidden canvas for live recording
+  const maskCanvasRef = useRef<HTMLCanvasElement>(null);
+  const liveCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [isFlashing, setIsFlashing] = useState(false);
@@ -35,30 +35,32 @@ export default function PhotoboothStudio() {
   const [downloadId, setDownloadId] = useState('');
   const [hostUrl, setHostUrl] = useState('');
 
-  // Settings
   const [timerDuration, setTimerDuration] = useState(3);
   const [livePhotoEnabled, setLivePhotoEnabled] = useState(true);
-  const [photoCount, setPhotoCount] = useState<1 | 3 | 4>(4);
 
-  // Phase
   const [appPhase, setAppPhase] = useState<AppPhase>('capture');
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [retakeIndex, setRetakeIndex] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  // Result
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'photo' | 'video'>('photo');
 
-  // MediaRecorder refs â€” use refs not state to avoid stale closure
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
-  // â”€â”€â”€ Auto-select first template â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const requiredPhotos = 4;
+
   useEffect(() => {
     const active = templates.filter(t => t.active);
-    if (!selectedTemplate && active.length > 0) {
-      setSelectedTemplate(active[0]);
+    const grids = active.filter(t => (t.layout || (t.isCustom ? 'strip-3' : 'single')) === 'grid-4');
+
+    if (!selectedTemplate) {
+      if (grids.length > 0) {
+        setSelectedTemplate(grids[0]);
+      } else if (active.length > 0) {
+        setSelectedTemplate(active[0]);
+      }
     }
   }, [templates, selectedTemplate, setSelectedTemplate]);
 
@@ -66,13 +68,6 @@ export default function PhotoboothStudio() {
     if (typeof window !== 'undefined') setHostUrl(window.location.origin);
   }, []);
 
-  // ─── Required photos based on user selection ──────────────────────────────
-  const requiredPhotos = photoCount;
-
-  // Map photo count to layout type for filtering templates
-  const layoutForCount = (count: number) => count === 1 ? 'single' : count === 3 ? 'strip-3' : 'grid-4';
-
-  // ——— AI Segmentation loop —————————————————————————————————————————————————————
   useEffect(() => {
     if (!removeBackground) return;
     let running = true;
@@ -104,7 +99,7 @@ export default function PhotoboothStudio() {
       const loop = async () => {
         if (!running) return;
         if (video.readyState >= 2) {
-          try { await seg.send({ image: video }); } catch (_) {}
+          try { await seg.send({ image: video }); } catch (_) { }
         }
         requestAnimationFrame(loop);
       };
@@ -115,7 +110,6 @@ export default function PhotoboothStudio() {
     return () => { running = false; seg?.close(); };
   }, [removeBackground]);
 
-  // ——— Live Photo canvas loop (runs always in background) ———————————————————————
   useEffect(() => {
     let running = true;
     let raf: number;
@@ -125,19 +119,22 @@ export default function PhotoboothStudio() {
       const video = webcamRef.current?.video;
       const lc = liveCanvasRef.current;
       const mc = maskCanvasRef.current;
+
       if (lc && video && video.readyState >= 2) {
         const ctx = lc.getContext('2d');
         if (ctx) {
           if (lc.width !== video.videoWidth) lc.width = video.videoWidth;
           if (lc.height !== video.videoHeight) lc.height = video.videoHeight;
           ctx.clearRect(0, 0, lc.width, lc.height);
-          // Draw camera (mirrored or masked)
+
           if (removeBackground && mc) {
             ctx.drawImage(mc, 0, 0, lc.width, lc.height);
           } else {
             ctx.save();
-            ctx.translate(lc.width, 0);
-            ctx.scale(-1, 1);
+            if (facingMode === 'user') {
+              ctx.translate(lc.width, 0);
+              ctx.scale(-1, 1);
+            }
             ctx.drawImage(video, 0, 0, lc.width, lc.height);
             ctx.restore();
           }
@@ -145,24 +142,37 @@ export default function PhotoboothStudio() {
       }
       raf = requestAnimationFrame(draw);
     };
+
     draw();
     return () => { running = false; cancelAnimationFrame(raf); };
-  }, [removeBackground]);
+  }, [removeBackground, facingMode]);
 
-  // â”€â”€â”€ Capture helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const grabFrame = async (): Promise<string | null> => {
+    let raw: string | null = null;
+    let isMask = false;
+
     if (removeBackground && maskCanvasRef.current) {
-      return maskCanvasRef.current.toDataURL('image/png');
+      raw = maskCanvasRef.current.toDataURL('image/png');
+      isMask = true;
+    } else {
+      raw = webcamRef.current?.getScreenshot() || null;
     }
-    const raw = webcamRef.current?.getScreenshot();
+
     if (!raw) return null;
-    // mirror it
+
     const img = new Image();
-    await new Promise(r => { img.onload = r; img.src = raw; });
+    await new Promise(r => { img.onload = r; img.src = raw!; });
+
     const c = document.createElement('canvas');
-    c.width = img.width; c.height = img.height;
+    c.width = img.width;
+    c.height = img.height;
     const ctx = c.getContext('2d')!;
-    ctx.translate(c.width, 0); ctx.scale(-1, 1);
+
+    if (!isMask && facingMode === 'user') {
+      ctx.translate(c.width, 0);
+      ctx.scale(-1, 1);
+    }
+
     ctx.drawImage(img, 0, 0);
     return c.toDataURL('image/png');
   };
@@ -172,8 +182,6 @@ export default function PhotoboothStudio() {
     setTimeout(() => setIsFlashing(false), 120);
   };
 
-  // â”€â”€â”€ Start / Snap sequence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Using refs to avoid stale closure problems inside setInterval
   const capturedRef = useRef<string[]>([]);
   const retakeIndexRef = useRef<number | null>(null);
 
@@ -181,15 +189,14 @@ export default function PhotoboothStudio() {
     capturedRef.current = [...startingPhotos];
     retakeIndexRef.current = forRetakeIndex;
 
-    // Start live recorder (paused initially)
     if (livePhotoEnabled && !mediaRecorderRef.current && liveCanvasRef.current) {
       try {
         const stream = (liveCanvasRef.current as any).captureStream(30);
         const rec = new MediaRecorder(stream, { mimeType: 'video/webm' });
         rec.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data); };
-        rec.start(500); // collect data every 500ms for smooth recording
+        rec.start(500);
         mediaRecorderRef.current = rec;
-      } catch (e) { console.warn('Live photo not supported', e); }
+      } catch (e) { console.warn(e); }
     }
 
     runCountdownThenSnap();
@@ -199,7 +206,7 @@ export default function PhotoboothStudio() {
     const dur = timerDuration === 0 ? 0 : timerDuration;
 
     if (dur === 0) {
-      doSnap();
+      setTimeout(() => doSnap(), 300);
       return;
     }
 
@@ -225,28 +232,23 @@ export default function PhotoboothStudio() {
 
     const ri = retakeIndexRef.current;
     if (ri !== null) {
-      // Retake single photo
       const updated = [...capturedRef.current];
       updated[ri] = photo;
       capturedRef.current = updated;
       setCapturedPhotos(updated);
       retakeIndexRef.current = null;
       setRetakeIndex(null);
-      // Go back to review phase
       setAppPhase('review');
       setIsProcessing(false);
     } else {
-      // Normal sequence
       capturedRef.current.push(photo);
       setCapturedPhotos([...capturedRef.current]);
 
       if (capturedRef.current.length < requiredPhotos) {
-        // Wait 1s then countdown for next photo
         setTimeout(() => {
           runCountdownThenSnap();
         }, 1000);
       } else {
-        // All photos taken — go to review phase
         setAppPhase('review');
         setIsProcessing(false);
       }
@@ -256,16 +258,20 @@ export default function PhotoboothStudio() {
   const handleShutter = () => {
     if (isProcessing || countdown !== null) return;
     setIsProcessing(true);
+
+    if (retakeIndexRef.current !== null) {
+      startCaptureSequence(capturedPhotos, retakeIndexRef.current);
+      return;
+    }
+
     setCapturedPhotos([]);
     capturedRef.current = [];
     retakeIndexRef.current = null;
     setRetakeIndex(null);
-    setSelectedTemplate(null);
     setPreviewImage(null);
 
-    // Reset recorder
     if (mediaRecorderRef.current) {
-      try { mediaRecorderRef.current.stop(); } catch (_) {}
+      try { mediaRecorderRef.current.stop(); } catch (_) { }
       mediaRecorderRef.current = null;
     }
     recordedChunksRef.current = [];
@@ -276,9 +282,14 @@ export default function PhotoboothStudio() {
   const handleRetakeSingle = (index: number) => {
     setRetakeIndex(index);
     setAppPhase('capture');
-    setIsProcessing(true);
     retakeIndexRef.current = index;
-    startCaptureSequence(capturedPhotos, index);
+
+    if (timerDuration === 0) {
+      setIsProcessing(false);
+    } else {
+      setIsProcessing(true);
+      startCaptureSequence(capturedPhotos, index);
+    }
   };
 
   const handleConfirmReview = () => {
@@ -291,14 +302,18 @@ export default function PhotoboothStudio() {
     setRetakeIndex(null);
     setAppPhase('capture');
     if (mediaRecorderRef.current) {
-      try { mediaRecorderRef.current.stop(); } catch (_) {}
+      try { mediaRecorderRef.current.stop(); } catch (_) { }
       mediaRecorderRef.current = null;
     }
     recordedChunksRef.current = [];
     setFinalVideoUrl(null);
   };
 
-  // â”€â”€â”€ Auto-detect transparent slot bounding boxes in template â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const handleBackToReview = () => {
+    setAppPhase('review');
+    setFinalImage(null);
+  };
+
   const detectSlots = (tplImg: HTMLImageElement, numSlots: number) => {
     const tc = document.createElement('canvas');
     tc.width = tplImg.naturalWidth || tplImg.width;
@@ -311,10 +326,9 @@ export default function PhotoboothStudio() {
     try {
       data = tctx.getImageData(0, 0, W, H).data;
     } catch {
-      return []; // CORS error fallback
+      return [];
     }
 
-    // Count % transparent pixels per row
     const rowTrans = new Float32Array(H);
     for (let y = 0; y < H; y++) {
       let cnt = 0;
@@ -324,7 +338,6 @@ export default function PhotoboothStudio() {
       rowTrans[y] = cnt / W;
     }
 
-    // Find contiguous bands of rows with >25% transparency
     const THRESH = 0.25;
     const bands: { y1: number; y2: number }[] = [];
     let inBand = false, start = 0;
@@ -334,7 +347,6 @@ export default function PhotoboothStudio() {
     }
     if (inBand) bands.push({ y1: start, y2: H - 1 });
 
-    // For each band get horizontal extent from the middle row
     const slots = bands
       .map(b => {
         let x1 = W, x2 = 0;
@@ -347,13 +359,12 @@ export default function PhotoboothStudio() {
         }
         return { x: x1, y: b.y1, w: x2 - x1 + 1, h: b.y2 - b.y1 + 1 };
       })
-      .filter(s => s.w > W * 0.1 && s.h > H * 0.04); // ignore tiny artefacts
+      .filter(s => s.w > W * 0.1 && s.h > H * 0.04);
 
-    slots.sort((a, b) => a.y - b.y); // top to bottom
+    slots.sort((a, b) => a.y - b.y);
     return slots;
   };
 
-  // ─── Composite: generate image from photos + template ──────────────────
   const compositePhotos = async (template: typeof selectedTemplate, photos: string[], addWatermark: boolean = false): Promise<string | null> => {
     if (!template) return null;
 
@@ -369,16 +380,20 @@ export default function PhotoboothStudio() {
     const ctx = c.getContext('2d', { alpha: true })!;
     ctx.clearRect(0, 0, W, H);
 
-    const builtinSlots: Record<string, Array<{x:number;y:number;w:number;h:number}>> = {
-      'builtin-1': [{x:100, y:100, w:1000, h:1300}],
-      'builtin-2': [{x:60,  y:60,  w:1080, h:1660}],
-      'builtin-3': [{x:150, y:50,  w:900,  h:1700}],
-      'builtin-4': [
-        {x:15,  y:102, w:483, h:527},  // Heart top-left
-        {x:570, y:102, w:468, h:468},  // Window top-right
-        {x:15,  y:760, w:483, h:424},  // Window bottom-left
-        {x:527, y:820, w:512, h:483},  // Heart bottom-right
-      ],
+    // Get precise pixel data to map custom holes
+    ctx.drawImage(tplImg, 0, 0, W, H);
+    let tplData: Uint8ClampedArray | null = null;
+    try {
+      tplData = ctx.getImageData(0, 0, W, H).data;
+    } catch (e) {
+      console.warn("Could not read template pixel data", e);
+    }
+    ctx.clearRect(0, 0, W, H);
+
+    const builtinSlots: Record<string, Array<{ x: number; y: number; w: number; h: number }>> = {
+      'builtin-1': [{ x: 100, y: 100, w: 1000, h: 1300 }],
+      'builtin-2': [{ x: 60, y: 60, w: 1080, h: 1660 }],
+      'builtin-3': [{ x: 150, y: 50, w: 900, h: 1700 }],
     };
     const builtinHint = template?.id ? builtinSlots[template.id] : undefined;
     const slots = builtinHint || detectSlots(tplImg, photos.length);
@@ -395,15 +410,39 @@ export default function PhotoboothStudio() {
         slotX = s.x; slotY = s.y; slotW = s.w; slotH = s.h;
       } else {
         const layout = template.layout || (template.isCustom ? 'strip-3' : 'grid-4');
+        let qx = 0, qy = 0, qw = W, qh = H;
+        
         if (layout === 'single') {
-          slotX = 0; slotY = 0; slotW = W; slotH = H;
+          qx = 0; qy = 0; qw = W; qh = H;
         } else if (layout === 'strip-3') {
-          slotX = 0; slotY = Math.floor(i * H / 3); slotW = W; slotH = Math.floor(H / 3);
+          qx = 0; qy = Math.floor(i * H / 3); qw = W; qh = Math.floor(H / 3);
         } else {
-          slotX = (i % 2) * Math.floor(W / 2);
-          slotY = Math.floor(i / 2) * Math.floor(H / 2);
-          slotW = Math.floor(W / 2);
-          slotH = Math.floor(H / 2);
+          qx = (i % 2) * Math.floor(W / 2);
+          qy = Math.floor(i / 2) * Math.floor(H / 2);
+          qw = Math.floor(W / 2);
+          qh = Math.floor(H / 2);
+        }
+
+        slotX = qx; slotY = qy; slotW = qw; slotH = qh;
+
+        // Precise hole detection inside the quadrant to perfectly align the photo
+        if (tplData) {
+          let minX = W, minY = H, maxX = 0, maxY = 0;
+          let found = false;
+          for (let y = qy; y < qy + qh; y++) {
+            for (let x = qx; x < qx + qw; x++) {
+              if (tplData[(y * W + x) * 4 + 3] < 40) {
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+                found = true;
+              }
+            }
+          }
+          if (found) {
+            slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
+          }
         }
       }
 
@@ -450,7 +489,6 @@ export default function PhotoboothStudio() {
     return c.toDataURL('image/png');
   };
 
-  // ─── Generate preview (called when template changes in review phase) ───
   const generatePreview = async (template: typeof selectedTemplate) => {
     if (!template || capturedPhotos.length === 0) {
       setPreviewImage(null);
@@ -460,19 +498,16 @@ export default function PhotoboothStudio() {
     setPreviewImage(result);
   };
 
-  // Auto-regenerate preview when template or photos change in review phase
   useEffect(() => {
     if (appPhase === 'review' && selectedTemplate && capturedPhotos.length > 0) {
       generatePreview(selectedTemplate);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTemplate, capturedPhotos, appPhase]);
 
-  // ─── Finish: finalize with watermark ───
   const finishComposite = async () => {
     setIsProcessing(true);
 
-    // Finalize video
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       if (mediaRecorderRef.current.state === 'paused') mediaRecorderRef.current.resume();
       mediaRecorderRef.current.stop();
@@ -493,13 +528,12 @@ export default function PhotoboothStudio() {
 
     const id = Math.random().toString(36).slice(2, 10);
     setDownloadId(id);
-    try { localStorage.setItem(`presuniv_booth_photo_${id}`, finalData); } catch (_) {}
+    try { localStorage.setItem(`presuniv_booth_photo_${id}`, finalData); } catch (_) { }
 
     setAppPhase('result');
     setIsProcessing(false);
   };
 
-  // ——— Reset ———————————————————————————————————————————————————————————————————
   const resetAll = () => {
     setFinalImage(null);
     setPreviewImage(null);
@@ -511,13 +545,12 @@ export default function PhotoboothStudio() {
     setIsProcessing(false);
     setViewMode('photo');
     if (mediaRecorderRef.current) {
-      try { mediaRecorderRef.current.stop(); } catch (_) {}
+      try { mediaRecorderRef.current.stop(); } catch (_) { }
       mediaRecorderRef.current = null;
     }
     recordedChunksRef.current = [];
   };
 
-  // â”€â”€â”€ Download / Print â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleDownload = () => {
     if (viewMode === 'video' && finalVideoUrl) {
       const a = document.createElement('a'); a.href = finalVideoUrl; a.download = `PresUniv-Booth-Live-${Date.now()}.webm`; a.click();
@@ -593,71 +626,60 @@ export default function PhotoboothStudio() {
       pdf.addImage(finalImage, 'JPEG', x, y, fw, fh, undefined, 'FAST');
       pdf.save(`PresUniv-Booth-${Date.now()}.pdf`);
     } catch (err) {
-      console.error('PDF error:', err);
+      console.error(err);
       alert('Gagal membuat PDF.');
     }
   };
 
-  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const cycleTimer = () => {
     setTimerDuration(t => t === 0 ? 3 : t === 3 ? 10 : 0);
   };
 
   const activeTemplates = templates.filter(t => t.active);
-  // In review, filter templates matching photo count
-  const matchingTemplates = activeTemplates.filter(t => {
+  const gridTemplates = activeTemplates.filter(t => {
     const tLayout = t.layout || (t.isCustom ? 'strip-3' : 'single');
-    return tLayout === layoutForCount(photoCount);
+    return tLayout === 'grid-4';
   });
   const shotLabel = retakeIndex !== null
     ? `Ulang Foto ${retakeIndex + 1} dari ${requiredPhotos}`
     : `Foto ${capturedPhotos.length + 1} dari ${requiredPhotos}`;
 
-  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
-    // MAIN WRAPPER: Background hitam di HP, Gradien di Desktop
     <div className="w-full h-screen flex flex-col lg:flex-row items-center justify-center bg-black lg:bg-gradient-to-br lg:from-[#00205B] lg:via-[#00153D] lg:to-[#8A1538] p-0 lg:p-6 relative overflow-hidden font-sans">
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" strategy="lazyOnload" />
 
-      {/* Hidden live recording canvas */}
       <canvas ref={liveCanvasRef} className="hidden" />
 
-      {/* â”€â”€ DESKTOP ONLY: IDENTITAS KAMPUS â”€â”€ */}
       <div className="hidden lg:flex w-full lg:w-1/3 p-12 flex-col justify-center text-white z-10 text-left">
         <div className="mb-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/President_University_Logo.png" alt="President University Logo" className="w-32 h-auto drop-shadow-lg" />
         </div>
         <h1 className="text-6xl font-extrabold tracking-tight mb-2 drop-shadow-xl">
-          PresUniv<br/><span className="text-[#FDB813]">Booth.</span>
+          PresUniv<br /><span className="text-[#FDB813]">Booth.</span>
         </h1>
         <p className="text-lg text-white/80 drop-shadow mb-0 font-medium">
-          Where Tomorrow's Leaders Make Memories.
+          Where Tomorrow&apos;s Leaders Make Memories.
         </p>
       </div>
 
-      {/* â”€â”€ KOTAK KAMERA UTAMA â”€â”€ */}
-      {/* Mobile: Fullscreen tanpa batas. Desktop: Kotak dengan border dan shadow */}
       <div className="relative w-full h-full lg:w-2/3 lg:max-h-[90vh] flex-1 lg:bg-white lg:rounded-3xl overflow-hidden lg:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col lg:border lg:border-white/20 z-10">
 
-        {/* â”€â”€ MOBILE ONLY: VIGNETTE GRADIENT â”€â”€ */}
         {appPhase === 'capture' && (
           <>
-            {/* Atas: Navy memudar ke bawah */}
             <div className="lg:hidden absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-[#00205B]/90 via-[#00205B]/40 to-transparent z-20 pointer-events-none" />
-            {/* Bawah: Maroon memudar ke atas */}
             <div className="lg:hidden absolute bottom-0 inset-x-0 h-64 bg-gradient-to-t from-[#8A1538]/90 via-[#8A1538]/40 to-transparent z-20 pointer-events-none" />
           </>
         )}
 
-        {/* ——— MOBILE ONLY: FLOATING LOGO ——— */}
         <div className="lg:hidden absolute top-6 left-5 z-40 flex items-center gap-3 pointer-events-none">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/President_University_Logo.png" alt="Logo" className="w-9 h-auto drop-shadow-lg" />
           <h1 className="text-xl font-extrabold tracking-tight text-white drop-shadow-md">
             PresUniv<span className="text-[#FDB813]">.</span>
           </h1>
         </div>
 
-        {/* ——— TOP BAR (Controls) ——— */}
         <div className="absolute top-0 right-0 lg:inset-x-0 lg:bg-gradient-to-b lg:from-black/80 lg:to-transparent z-40 pointer-events-none flex flex-col lg:flex-row justify-end lg:justify-between items-end lg:items-start p-5 gap-3">
           <span className="hidden lg:block text-white font-bold tracking-widest text-sm uppercase drop-shadow-md">President University</span>
 
@@ -673,47 +695,43 @@ export default function PhotoboothStudio() {
           )}
         </div>
 
-        {/* â”€â”€ VIEWPORT (Layar Kamera Utama) â”€â”€ */}
-        {/* Mobile: Absolute penuhi layar. Desktop: Flex menyesuaikan wadah */}
         <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 bg-black overflow-hidden flex flex-col z-0 lg:z-10">
 
-          {/* FASE CAPTURE */}
-          {appPhase === 'capture' && (
-            <>
-              <Webcam
-                ref={webcamRef}
-                audio={false}
-                mirrored={true}
-                screenshotFormat="image/png"
-                videoConstraints={{ facingMode, width: 1280, height: 960 }}
-                className={`w-full h-full object-cover ${removeBackground ? 'opacity-0 absolute inset-0' : ''}`}
-              />
+          {/* Capture Container (Displays native hardware aspect ratio) */}
+          <div 
+            className={`absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden bg-black transition-opacity duration-300 ${appPhase === 'capture' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'}`} 
+          >
+            <Webcam
+              ref={webcamRef}
+              audio={false}
+              mirrored={facingMode === 'user'}
+              screenshotFormat="image/png"
+              videoConstraints={{ facingMode, width: 1280, height: 960 }}
+              className={`w-full h-full object-contain ${(appPhase !== 'capture' || removeBackground) ? 'opacity-0' : ''}`}
+            />
 
-              <canvas
-                ref={maskCanvasRef}
-                width={1280}
-                height={960}
-                className={`absolute inset-0 w-full h-full object-cover ${removeBackground ? 'z-10' : 'hidden'}`}
-              />
+            <canvas
+              ref={maskCanvasRef}
+              width={1280}
+              height={960}
+              className={`absolute inset-0 w-full h-full object-contain ${(appPhase === 'capture' && removeBackground) ? 'opacity-100' : 'opacity-0'}`}
+            />
 
+            {appPhase === 'capture' && countdown !== null && (
+              <div className="absolute inset-0 z-30 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center">
+                <div className="text-[11rem] font-bold text-white drop-shadow-[0_0_25px_rgba(253,184,19,0.5)] leading-none">{countdown}</div>
+                <div className="mt-4 bg-[#8A1538] text-white text-sm font-bold px-5 py-2 rounded-full border border-white/20 shadow-lg">{shotLabel}</div>
+              </div>
+            )}
 
-
-              {countdown !== null && (
-                <div className="absolute inset-0 z-30 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center">
-                  <div className="text-[11rem] font-bold text-white drop-shadow-[0_0_25px_rgba(253,184,19,0.5)] leading-none">{countdown}</div>
-                  <div className="mt-4 bg-[#8A1538] text-white text-sm font-bold px-5 py-2 rounded-full border border-white/20 shadow-lg">{shotLabel}</div>
-                </div>
-              )}
-
+            {appPhase === 'capture' && (
               <div className={`absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-75 ${isFlashing ? 'opacity-100' : 'opacity-0'}`} />
-            </>
-          )}
+            )}
+          </div>
 
-          {/* FASE REVIEW — pick template + live preview */}
           {appPhase === 'review' && capturedPhotos.length > 0 && (
             <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 lg:bg-gray-50 bg-black/95 backdrop-blur-md z-30 flex flex-col p-4 sm:p-6 overflow-y-auto">
 
-              {/* Preview image */}
               <div className="flex-1 min-h-0 relative w-full flex items-center justify-center mb-4">
                 {previewImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -726,9 +744,8 @@ export default function PhotoboothStudio() {
                 )}
               </div>
 
-              {/* Template selector - filtered by photo count */}
               <div className="flex gap-2 overflow-x-auto pb-2 mb-3 snap-x custom-scrollbar justify-center">
-                {matchingTemplates.map(tpl => (
+                {gridTemplates.map(tpl => (
                   <button
                     key={tpl.id}
                     onClick={() => setSelectedTemplate(tpl)}
@@ -750,7 +767,6 @@ export default function PhotoboothStudio() {
                 ))}
               </div>
 
-              {/* Photo thumbnails + retake */}
               <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3">
                 {capturedPhotos.map((photo, i) => (
                   <button key={i} onClick={() => handleRetakeSingle(i)} className="relative group w-12 h-16 sm:w-14 sm:h-18 rounded-lg overflow-hidden border-2 border-white/20 lg:border-gray-200 shadow-sm hover:border-[#8A1538] hover:shadow-lg transition-all flex-shrink-0">
@@ -765,11 +781,10 @@ export default function PhotoboothStudio() {
                 ))}
                 <button onClick={handleRetakeAll} className="w-12 h-16 sm:w-14 sm:h-18 rounded-lg border-2 border-dashed border-red-400/50 flex flex-col items-center justify-center text-red-300 lg:text-red-400 hover:border-red-400 hover:bg-red-500/10 transition-all flex-shrink-0">
                   <RotateCcw size={14} />
-                  <span className="text-[7px] font-bold mt-0.5">Ulang<br/>Semua</span>
+                  <span className="text-[7px] font-bold mt-0.5">Ulang<br />Semua</span>
                 </button>
               </div>
 
-              {/* Save button */}
               <div className="flex justify-center">
                 <button onClick={handleConfirmReview} disabled={isProcessing || !selectedTemplate || !previewImage} className="h-11 px-8 rounded-full bg-gradient-to-r from-[#00205B] to-[#8A1538] text-white flex items-center gap-2 text-sm font-extrabold shadow-xl hover:shadow-2xl transition-all disabled:opacity-40">
                   {isProcessing ? 'Memproses...' : <><Download size={16} /> Simpan Hasil</>}
@@ -778,9 +793,7 @@ export default function PhotoboothStudio() {
             </div>
           )}
 
-          {/* FASE RESULT */}
           {appPhase === 'result' && finalImage && (
-            // Mobile: Overlay hitam blur agar fokus ke hasil. Desktop: Abu-abu bersih
             <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 lg:bg-gray-50 bg-black/95 backdrop-blur-md z-30 flex flex-col p-4 sm:p-6 pb-48 lg:pb-6 overflow-y-auto">
               <div className="flex-1 min-h-0 relative w-full flex items-center justify-center drop-shadow-xl mt-10 lg:mt-0">
                 {viewMode === 'video' && finalVideoUrl
@@ -799,36 +812,14 @@ export default function PhotoboothStudio() {
           )}
         </div>
 
-        {/* â”€â”€ BOTTOM BAR (Slogan & Shutter) â”€â”€ */}
-        <div className="absolute bottom-0 inset-x-0 lg:relative lg:bottom-auto lg:inset-x-auto h-auto min-h-[9rem] lg:bg-white bg-transparent lg:border-t lg:border-gray-100 px-4 sm:px-5 pb-8 pt-4 lg:py-4 flex flex-col sm:flex-row items-center gap-4 z-40 pointer-events-none">
-          
-          {appPhase === 'capture' && (
-            <div className="w-full sm:flex-1 flex items-center justify-center gap-2 pointer-events-auto">
-              {/* Photo count selector */}
-              <div className="flex items-center gap-1 bg-black/40 lg:bg-gray-100 backdrop-blur-md rounded-full p-1 border border-white/20 lg:border-gray-200">
-                {([1, 3, 4] as const).map(n => (
-                  <button
-                    key={n}
-                    onClick={() => setPhotoCount(n)}
-                    disabled={isProcessing || countdown !== null}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${photoCount === n
-                      ? 'bg-[#FDB813] text-[#00205B] shadow-md'
-                      : 'text-white/70 lg:text-gray-500 hover:text-white lg:hover:text-gray-800'}`}
-                  >
-                    {n} Foto
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+        <div className="absolute bottom-0 inset-x-0 lg:relative lg:bottom-auto lg:inset-x-auto h-auto min-h-[9rem] lg:bg-white bg-transparent lg:border-t lg:border-gray-100 px-4 sm:px-5 pb-8 pt-4 lg:py-4 flex items-center justify-center gap-4 z-40 pointer-events-none">
 
-          <div className={`flex flex-col lg:flex-row items-center gap-2 sm:gap-3 pointer-events-auto ${appPhase === 'capture' ? 'w-full sm:w-auto sm:ml-auto' : 'w-full justify-center flex-wrap flex-row'}`}>
-            
+          <div className={`flex flex-col lg:flex-row items-center gap-2 sm:gap-3 pointer-events-auto ${appPhase === 'capture' ? 'w-full items-center justify-center' : 'w-full justify-center flex-wrap flex-row'}`}>
+
             {appPhase === 'capture' && (
               <div className="flex flex-col items-center">
-                {/* SLOGAN MELAYANG KHUSUS HP */}
                 <p className="lg:hidden text-white/90 text-[10px] font-bold tracking-widest drop-shadow-md mb-3 text-center pointer-events-none">
-                  WHERE TOMORROW'S LEADERS MAKE MEMORIES.
+                  WHERE TOMORROW&apos;S LEADERS MAKE MEMORIES.
                 </p>
 
                 <button onClick={handleShutter} disabled={isProcessing || countdown !== null} className="w-16 h-16 lg:w-20 lg:h-20 rounded-full border-[5px] border-white/80 lg:border-gray-200 bg-white/20 lg:bg-white shadow-xl flex items-center justify-center disabled:opacity-40 hover:border-[#FDB813] lg:hover:border-[#8A1538] transition-colors flex-shrink-0 group backdrop-blur-sm lg:backdrop-blur-none">
@@ -839,6 +830,9 @@ export default function PhotoboothStudio() {
 
             {appPhase === 'result' && (
               <>
+                <button onClick={handleBackToReview} disabled={isProcessing} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-gray-100 bg-white/20 backdrop-blur-md lg:text-[#00205B] text-white lg:hover:bg-gray-200 hover:bg-white/30 flex items-center gap-1.5 text-xs sm:text-sm font-bold transition-colors flex-shrink-0 border border-transparent lg:border-none border-white/30 shadow-lg lg:shadow-none">
+                  <ArrowRight size={14} className="rotate-180 sm:w-4 sm:h-4" /> Ganti Template
+                </button>
                 <button onClick={handleRetakeAll} disabled={isProcessing} className="h-10 sm:h-12 px-3 sm:px-5 rounded-full lg:bg-red-50 bg-red-500/20 backdrop-blur-md lg:text-[#8A1538] text-red-100 lg:hover:bg-red-100 hover:bg-red-500/40 flex items-center gap-1.5 text-xs sm:text-sm font-bold transition-colors flex-shrink-0 border border-transparent lg:border-none border-red-400/30">
                   <RotateCcw size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Ulangi Semua</span>
                   <span className="sm:hidden">Ulang Semua</span>
@@ -855,10 +849,8 @@ export default function PhotoboothStudio() {
         </div>
       </div>
 
-      {/* QR Modal (Tidak berubah) */}
       {showQR && finalImage && (
         <div className="fixed inset-0 bg-black/80 lg:bg-[#00205B]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          {/* ... Modal content ... */}
           <div className="bg-white p-10 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full relative">
             <button onClick={() => setShowQR(false)} className="absolute top-5 right-5 w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-500">
               <X size={18} />
@@ -874,4 +866,3 @@ export default function PhotoboothStudio() {
     </div>
   );
 }
-
