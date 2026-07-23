@@ -34,6 +34,7 @@ export default function AdminPage() {
     }
   };
 
+  // remove black
   const processImageRemovingBlack = (
     dataUrl: string, 
     shouldRemoveBlack: boolean = true
