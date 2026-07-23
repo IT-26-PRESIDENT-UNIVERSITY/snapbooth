@@ -34,53 +34,38 @@ export default function AdminPage() {
     }
   };
 
-  const processImageRemovingBlack = async (dataUrl: string, applyRemove: boolean): Promise<string> => {
+  const processImageRemovingBlack = (
+    dataUrl: string, 
+    shouldRemoveBlack: boolean = true
+  ): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         if (!ctx) return resolve(dataUrl);
+        ctx.drawImage(img, 0, 0);
 
-        // Downscale large images (max 1080px width) to avoid 500 server payload errors
-        let targetWidth = img.width;
-        let targetHeight = img.height;
-        const MAX_WIDTH = 1080;
-        
-        if (targetWidth > MAX_WIDTH) {
-          const ratio = MAX_WIDTH / targetWidth;
-          targetWidth = MAX_WIDTH;
-          targetHeight = Math.floor(img.height * ratio);
-        }
-
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-        
-        // Use better quality for downscaling
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
-        if (!applyRemove) {
-          return resolve(canvas.toDataURL('image/png', 0.9));
+        // Jika opsi Hapus Hitam TIDAK dicentang, langsung kembalikan gambar asli
+        if (!shouldRemoveBlack) {
+          return resolve(canvas.toDataURL('image/png'));
         }
 
         try {
-          const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imageData.data;
-          const W = targetWidth;
-          const H = targetHeight;
+          const W = canvas.width;
+          const H = canvas.height;
 
-          // Only pixels that are very dark qualify as "black slot"
+          // 1. SOLUSI FAISM: Toleransi dinaikkan dari 40 ke 85
           const isBlack = (x: number, y: number) => {
             const i = (y * W + x) * 4;
-            return data[i] < 40 && data[i + 1] < 40 && data[i + 2] < 40;
+            return data[i] < 85 && data[i + 1] < 85 && data[i + 2] < 85;
           };
 
-          // Connected component labeling — find all contiguous black regions
           const visited = new Uint8Array(W * H);
-          // 8% threshold: hanya hapus area hitam yang sangat besar (slot foto),
-          // elemen kecil seperti logo/teks tetap aman.
           const MIN_SLOT_SIZE = W * H * 0.08;
 
           for (let startY = 0; startY < H; startY++) {
@@ -91,12 +76,19 @@ export default function AdminPage() {
               const region: number[] = [];
               const stack = [startPos];
               visited[startPos] = 1;
+              
+              // 2. SOLUSI PREUNI: Deteksi area pinggir kanvas
+              let touchesEdge = false; 
 
               while (stack.length > 0) {
                 const pos = stack.pop()!;
                 region.push(pos);
                 const x = pos % W;
                 const y = Math.floor(pos / W);
+                
+                if (x === 0 || x === W - 1 || y === 0 || y === H - 1) {
+                  touchesEdge = true;
+                }
 
                 if (x > 0     && !visited[pos - 1] && isBlack(x - 1, y)) { visited[pos - 1] = 1; stack.push(pos - 1); }
                 if (x < W - 1 && !visited[pos + 1] && isBlack(x + 1, y)) { visited[pos + 1] = 1; stack.push(pos + 1); }
@@ -104,10 +96,10 @@ export default function AdminPage() {
                 if (y < H - 1 && !visited[pos + W] && isBlack(x, y + 1)) { visited[pos + W] = 1; stack.push(pos + W); }
               }
 
-              // Erase large black regions (photo slots)
-              if (region.length >= MIN_SLOT_SIZE) {
+              // Hapus HANYA JIKA area besar DAN tidak menyentuh pinggiran luar
+              if (region.length >= MIN_SLOT_SIZE && !touchesEdge) {
                 for (const pos of region) {
-                  data[pos * 4 + 3] = 0; // transparent
+                  data[pos * 4 + 3] = 0;
                 }
               }
             }
