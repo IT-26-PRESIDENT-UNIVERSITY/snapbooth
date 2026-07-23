@@ -778,6 +778,7 @@ export default function PhotoboothStudio() {
             >
               {/* 1. Captured Frozen Photos */}
               {capturedPhotos.map((photo, i) => {
+                if (retakeIndex === i) return null;
                 const s = templateSlots[i];
                 if (!s) return null;
                 return (
@@ -798,32 +799,35 @@ export default function PhotoboothStudio() {
               })}
 
               {/* 2. Live Webcam (Only in the active slot!) */}
-              {templateSlots[capturedPhotos.length] && (
-                <div 
-                  className="absolute z-10 overflow-hidden"
-                  style={{
-                    left: `${(templateSlots[capturedPhotos.length].x / templateSize.w) * 100}%`,
-                    top: `${(templateSlots[capturedPhotos.length].y / templateSize.h) * 100}%`,
-                    width: `${(templateSlots[capturedPhotos.length].w / templateSize.w) * 100}%`,
-                    height: `${(templateSlots[capturedPhotos.length].h / templateSize.h) * 100}%`
-                  }}
-                >
-                  <Webcam
-                    ref={webcamRef}
-                    audio={false}
-                    mirrored={facingMode === 'user'}
-                    screenshotFormat="image/png"
-                    videoConstraints={{ facingMode, width: 1280, height: 960 }}
-                    className={`absolute inset-0 w-full h-full object-cover ${(appPhase !== 'capture' || removeBackground) ? 'opacity-0' : ''}`}
-                  />
-                  <canvas
-                    ref={maskCanvasRef}
-                    width={1280}
-                    height={960}
-                    className={`absolute inset-0 w-full h-full object-cover ${(appPhase === 'capture' && removeBackground) ? 'opacity-100' : 'opacity-0'}`}
-                  />
-                </div>
-              )}
+              {templateSlots[retakeIndex !== null ? retakeIndex : capturedPhotos.length] && (() => {
+                const activeSlot = templateSlots[retakeIndex !== null ? retakeIndex : capturedPhotos.length];
+                return (
+                  <div 
+                    className="absolute z-10 overflow-hidden"
+                    style={{
+                      left: `${(activeSlot.x / templateSize.w) * 100}%`,
+                      top: `${(activeSlot.y / templateSize.h) * 100}%`,
+                      width: `${(activeSlot.w / templateSize.w) * 100}%`,
+                      height: `${(activeSlot.h / templateSize.h) * 100}%`
+                    }}
+                  >
+                    <Webcam
+                      ref={webcamRef}
+                      audio={false}
+                      mirrored={facingMode === 'user'}
+                      screenshotFormat="image/png"
+                      videoConstraints={{ facingMode, width: 1280, height: 960 }}
+                      className={`absolute inset-0 w-full h-full object-cover ${(appPhase !== 'capture' || removeBackground) ? 'opacity-0' : ''}`}
+                    />
+                    <canvas
+                      ref={maskCanvasRef}
+                      width={1280}
+                      height={960}
+                      className={`absolute inset-0 w-full h-full object-cover ${(appPhase === 'capture' && removeBackground) ? 'opacity-100' : 'opacity-0'}`}
+                    />
+                  </div>
+                );
+              })()}
 
               {/* 3. The Template Image Overlay */}
               {selectedTemplate?.url && (
