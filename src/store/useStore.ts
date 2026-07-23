@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type PhotoFormat = 'single' | 'strip2' | 'strip4';
-export type TemplateLayout = 'single' | 'strip-3' | 'grid-4';
+export type TemplateLayout = 'single' | 'strip-3' | 'grid-4' | 'strip-4';
 
 export interface Template {
   id: string;
@@ -10,6 +10,7 @@ export interface Template {
   isCustom: boolean;
   active: boolean;
   layout?: TemplateLayout;
+  aspectRatio?: string;
 }
 
 const defaultTemplates: Template[] = [
