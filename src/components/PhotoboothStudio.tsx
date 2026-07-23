@@ -322,7 +322,7 @@ export default function PhotoboothStudio() {
     c.height = img.height;
     const ctx = c.getContext('2d')!;
 
-    if (!isMask && facingMode === 'user') {
+    if (isMask && facingMode === 'user') {
       ctx.translate(c.width, 0);
       ctx.scale(-1, 1);
     }
@@ -875,13 +875,13 @@ export default function PhotoboothStudio() {
                       audio={false}
                       mirrored={facingMode === 'user'}
                       screenshotFormat="image/png"
-                      videoConstraints={{ facingMode, width: 1280, height: 960 }}
+                      videoConstraints={{ facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }}
                       className={`absolute inset-0 w-full h-full object-cover ${(appPhase !== 'capture' || removeBackground) ? 'opacity-0' : ''}`}
                     />
                     <canvas
                       ref={maskCanvasRef}
-                      width={1280}
-                      height={960}
+                      width={1920}
+                      height={1080}
                       className={`absolute inset-0 w-full h-full object-cover ${(appPhase === 'capture' && removeBackground) ? 'opacity-100' : 'opacity-0'}`}
                     />
                   </div>
