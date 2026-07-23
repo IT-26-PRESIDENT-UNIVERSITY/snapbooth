@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import Webcam from 'react-webcam';
 import { useStore } from '@/store/useStore';
 import {
@@ -46,27 +46,103 @@ export default function PhotoboothStudio() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'photo' | 'video'>('photo');
 
+  const [templateSlots, setTemplateSlots] = useState<{x: number, y: number, w: number, h: number}[]>([]);
+  const [templateSize, setTemplateSize] = useState<{w: number, h: number}>({w: 1200, h: 1800});
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
-  const requiredPhotos = 4;
+  const requiredPhotos = useMemo(() => {
+    if (!selectedTemplate) return 4;
+    const layout = selectedTemplate.layout || (selectedTemplate.isCustom ? 'strip-3' : 'grid-4');
+    if (layout === 'single') return 1;
+    if (layout === 'strip-3') return 3;
+    if (layout === 'grid-4') return 4;
+    return 4;
+  }, [selectedTemplate]);
 
   useEffect(() => {
     const active = templates.filter(t => t.active);
-    const grids = active.filter(t => (t.layout || (t.isCustom ? 'strip-3' : 'single')) === 'grid-4');
-
-    if (!selectedTemplate) {
-      if (grids.length > 0) {
-        setSelectedTemplate(grids[0]);
-      } else if (active.length > 0) {
-        setSelectedTemplate(active[0]);
-      }
+    
+    if (!selectedTemplate && active.length > 0) {
+      setSelectedTemplate(active[0]);
     }
   }, [templates, selectedTemplate, setSelectedTemplate]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') setHostUrl(window.location.origin);
   }, []);
+
+  useEffect(() => {
+    if (!selectedTemplate?.url) return;
+    
+    let isMounted = true;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (!isMounted) return;
+      const W = img.naturalWidth || 1200;
+      const H = img.naturalHeight || 1800;
+      setTemplateSize({ w: W, h: H });
+
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const ctx = c.getContext('2d', { alpha: true })!;
+      ctx.drawImage(img, 0, 0, W, H);
+      
+      let tplData: Uint8ClampedArray | null = null;
+      try {
+        tplData = ctx.getImageData(0, 0, W, H).data;
+      } catch (e) {
+        console.warn("Could not read template pixel data", e);
+      }
+      
+      const layout = selectedTemplate.layout || (selectedTemplate.isCustom ? 'strip-3' : 'grid-4');
+      const reqPhotos = layout === 'single' ? 1 : layout === 'strip-3' ? 3 : layout === 'grid-4' ? 4 : 4;
+      
+      const slots: {x: number, y: number, w: number, h: number}[] = [];
+      for (let i = 0; i < reqPhotos; i++) {
+        let qx = 0, qy = 0, qw = W, qh = H;
+        
+        if (layout === 'single') {
+          qx = 0; qy = 0; qw = W; qh = H;
+        } else if (layout === 'strip-3') {
+          qx = 0; qy = Math.floor(i * H / 3); qw = W; qh = Math.floor(H / 3);
+        } else {
+          qx = (i % 2) * Math.floor(W / 2);
+          qy = Math.floor(i / 2) * Math.floor(H / 2);
+          qw = Math.floor(W / 2);
+          qh = Math.floor(H / 2);
+        }
+
+        let slotX = qx, slotY = qy, slotW = qw, slotH = qh;
+
+        if (tplData) {
+          let minX = W, minY = H, maxX = 0, maxY = 0;
+          let found = false;
+          for (let y = qy; y < qy + qh; y++) {
+            for (let x = qx; x < qx + qw; x++) {
+              if (tplData[(y * W + x) * 4 + 3] < 40) {
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+                found = true;
+              }
+            }
+          }
+          if (found) {
+            slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
+          }
+        }
+        slots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
+      }
+      setTemplateSlots(slots);
+    };
+    img.src = selectedTemplate.url;
+    
+    return () => { isMounted = false; };
+  }, [selectedTemplate]);
 
   useEffect(() => {
     if (!removeBackground) return;
@@ -636,10 +712,6 @@ export default function PhotoboothStudio() {
   };
 
   const activeTemplates = templates.filter(t => t.active);
-  const gridTemplates = activeTemplates.filter(t => {
-    const tLayout = t.layout || (t.isCustom ? 'strip-3' : 'single');
-    return tLayout === 'grid-4';
-  });
   const shotLabel = retakeIndex !== null
     ? `Ulang Foto ${retakeIndex + 1} dari ${requiredPhotos}`
     : `Foto ${capturedPhotos.length + 1} dari ${requiredPhotos}`;
@@ -697,25 +769,74 @@ export default function PhotoboothStudio() {
 
         <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 bg-black overflow-hidden flex flex-col z-0 lg:z-10">
 
-          {/* Capture Container (Displays native hardware aspect ratio) */}
+          {/* Capture WYSIWYG Container */}
           <div 
             className={`absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden bg-black transition-opacity duration-300 ${appPhase === 'capture' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'}`} 
           >
-            <Webcam
-              ref={webcamRef}
-              audio={false}
-              mirrored={facingMode === 'user'}
-              screenshotFormat="image/png"
-              videoConstraints={{ facingMode, width: 1280, height: 960 }}
-              className={`w-full h-full object-contain ${(appPhase !== 'capture' || removeBackground) ? 'opacity-0' : ''}`}
-            />
+            {/* True WYSIWYG Live Rendering Engine */}
+            <div 
+              className="relative shadow-2xl h-full max-w-full flex-shrink-0" 
+              style={{ aspectRatio: `${templateSize.w} / ${templateSize.h}` }}
+            >
+              {/* 1. Captured Frozen Photos */}
+              {capturedPhotos.map((photo, i) => {
+                const s = templateSlots[i];
+                if (!s) return null;
+                return (
+                  <div 
+                    key={i} 
+                    className="absolute z-10 overflow-hidden"
+                    style={{
+                      left: `${(s.x / templateSize.w) * 100}%`,
+                      top: `${(s.y / templateSize.h) * 100}%`,
+                      width: `${(s.w / templateSize.w) * 100}%`,
+                      height: `${(s.h / templateSize.h) * 100}%`
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo} className="w-full h-full object-cover" alt="" />
+                  </div>
+                );
+              })}
 
-            <canvas
-              ref={maskCanvasRef}
-              width={1280}
-              height={960}
-              className={`absolute inset-0 w-full h-full object-contain ${(appPhase === 'capture' && removeBackground) ? 'opacity-100' : 'opacity-0'}`}
-            />
+              {/* 2. Live Webcam (Only in the active slot!) */}
+              {templateSlots[capturedPhotos.length] && (
+                <div 
+                  className="absolute z-10 overflow-hidden"
+                  style={{
+                    left: `${(templateSlots[capturedPhotos.length].x / templateSize.w) * 100}%`,
+                    top: `${(templateSlots[capturedPhotos.length].y / templateSize.h) * 100}%`,
+                    width: `${(templateSlots[capturedPhotos.length].w / templateSize.w) * 100}%`,
+                    height: `${(templateSlots[capturedPhotos.length].h / templateSize.h) * 100}%`
+                  }}
+                >
+                  <Webcam
+                    ref={webcamRef}
+                    audio={false}
+                    mirrored={facingMode === 'user'}
+                    screenshotFormat="image/png"
+                    videoConstraints={{ facingMode, width: 1280, height: 960 }}
+                    className={`absolute inset-0 w-full h-full object-cover ${(appPhase !== 'capture' || removeBackground) ? 'opacity-0' : ''}`}
+                  />
+                  <canvas
+                    ref={maskCanvasRef}
+                    width={1280}
+                    height={960}
+                    className={`absolute inset-0 w-full h-full object-cover ${(appPhase === 'capture' && removeBackground) ? 'opacity-100' : 'opacity-0'}`}
+                  />
+                </div>
+              )}
+
+              {/* 3. The Template Image Overlay */}
+              {selectedTemplate?.url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img 
+                  src={selectedTemplate.url} 
+                  className="absolute inset-0 w-full h-full z-20 pointer-events-none drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]" 
+                  alt="Template" 
+                />
+              )}
+            </div>
 
             {appPhase === 'capture' && countdown !== null && (
               <div className="absolute inset-0 z-30 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center">
@@ -726,6 +847,37 @@ export default function PhotoboothStudio() {
 
             {appPhase === 'capture' && (
               <div className={`absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-75 ${isFlashing ? 'opacity-100' : 'opacity-0'}`} />
+            )}
+
+            {/* Template Selector Overlay during Capture */}
+            {appPhase === 'capture' && countdown === null && (
+              <div className="absolute bottom-6 left-0 right-0 z-40 flex flex-col items-center">
+                <div className="bg-black/50 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20 shadow-2xl max-w-[90%]">
+                  <div className="text-white/80 text-xs font-bold text-center mb-2 uppercase tracking-wider">Pilih Frame</div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 snap-x custom-scrollbar justify-center">
+                    {activeTemplates.map(tpl => (
+                      <button
+                        key={tpl.id}
+                        onClick={() => setSelectedTemplate(tpl)}
+                        className={`relative flex-shrink-0 w-14 h-20 sm:w-16 sm:h-22 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 snap-center
+                          ${selectedTemplate?.id === tpl.id ? 'border-[#FDB813] shadow-[0_0_12px_rgba(253,184,19,0.6)]' : 'border-white/30 hover:border-white/60'}`}
+                      >
+                        {tpl.url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={tpl.url} alt={tpl.name} className="w-full h-full object-contain p-0.5 bg-black/40" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs text-white/50">Wait</div>
+                        )}
+                        {selectedTemplate?.id === tpl.id && (
+                          <div className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#FDB813] rounded-full flex items-center justify-center shadow-md">
+                            <Check size={9} color="#00205B" strokeWidth={3} />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 
@@ -742,29 +894,6 @@ export default function PhotoboothStudio() {
                     <p className="text-sm font-bold lg:text-gray-400 text-white/50">Pilih frame di bawah untuk melihat preview</p>
                   </div>
                 )}
-              </div>
-
-              <div className="flex gap-2 overflow-x-auto pb-2 mb-3 snap-x custom-scrollbar justify-center">
-                {gridTemplates.map(tpl => (
-                  <button
-                    key={tpl.id}
-                    onClick={() => setSelectedTemplate(tpl)}
-                    className={`relative flex-shrink-0 w-14 h-20 sm:w-16 sm:h-22 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 snap-center
-                      ${selectedTemplate?.id === tpl.id ? 'border-[#FDB813] shadow-[0_0_12px_rgba(253,184,19,0.6)]' : 'border-white/30 lg:border-gray-200'}`}
-                  >
-                    {tpl.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={tpl.url} alt={tpl.name} className="w-full h-full object-contain p-0.5" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs text-white/50">Wait</div>
-                    )}
-                    {selectedTemplate?.id === tpl.id && (
-                      <div className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#FDB813] rounded-full flex items-center justify-center shadow-md">
-                        <Check size={9} color="#00205B" strokeWidth={3} />
-                      </div>
-                    )}
-                  </button>
-                ))}
               </div>
 
               <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3">
