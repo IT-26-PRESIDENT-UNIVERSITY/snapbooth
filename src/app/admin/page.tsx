@@ -68,7 +68,7 @@ export default function AdminPage() {
           };
 
           const visited = new Uint8Array(W * H);
-          const MIN_SLOT_SIZE = W * H * 0.08;
+          const MIN_SLOT_SIZE = W * H * 0.02; // Lowered to 2% to catch smaller slots
 
           for (let startY = 0; startY < H; startY++) {
             for (let startX = 0; startX < W; startX++) {
@@ -88,6 +88,7 @@ export default function AdminPage() {
                 const x = pos % W;
                 const y = Math.floor(pos / W);
                 
+                // Track if it touches edge (optional, but no longer restricts deletion)
                 if (x === 0 || x === W - 1 || y === 0 || y === H - 1) {
                   touchesEdge = true;
                 }
@@ -98,8 +99,8 @@ export default function AdminPage() {
                 if (y < H - 1 && !visited[pos + W] && isBlack(x, y + 1)) { visited[pos + W] = 1; stack.push(pos + W); }
               }
 
-              // Hapus HANYA JIKA area besar DAN tidak menyentuh pinggiran luar
-              if (region.length >= MIN_SLOT_SIZE && !touchesEdge) {
+              // Hapus area hitam asalkan ukurannya cukup besar (meskipun menyentuh pinggir)
+              if (region.length >= MIN_SLOT_SIZE) {
                 for (const pos of region) {
                   data[pos * 4 + 3] = 0;
                 }

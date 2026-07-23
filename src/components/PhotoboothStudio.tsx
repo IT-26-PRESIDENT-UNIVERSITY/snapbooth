@@ -39,7 +39,7 @@ const detectSlots = (tplImg: HTMLImageElement) => {
     rowTrans[y] = cnt / W;
   }
 
-  const THRESH = 0.25;
+  const THRESH = 0.10;
   const bands: { y1: number; y2: number }[] = [];
   let inBand = false, start = 0;
   for (let y = 0; y < H; y++) {
@@ -51,11 +51,12 @@ const detectSlots = (tplImg: HTMLImageElement) => {
   const slots = bands
     .map(b => {
       let x1 = W, x2 = 0;
-      const midY = Math.floor((b.y1 + b.y2) / 2);
-      for (let x = 0; x < W; x++) {
-        if (data[(midY * W + x) * 4 + 3] < 40) {
-          if (x < x1) x1 = x;
-          if (x > x2) x2 = x;
+      for (let y = b.y1; y <= b.y2; y++) {
+        for (let x = 0; x < W; x++) {
+          if (data[(y * W + x) * 4 + 3] < 40) {
+            if (x < x1) x1 = x;
+            if (x > x2) x2 = x;
+          }
         }
       }
       return { x: x1, y: b.y1, w: x2 - x1 + 1, h: b.y2 - b.y1 + 1 };
