@@ -46,6 +46,9 @@ export default function PhotoboothStudio() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'photo' | 'video'>('photo');
 
+  const [templateSlots, setTemplateSlots] = useState<{x: number, y: number, w: number, h: number}[]>([]);
+  const [templateSize, setTemplateSize] = useState<{w: number, h: number}>({w: 1200, h: 1800});
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
@@ -69,6 +72,77 @@ export default function PhotoboothStudio() {
   useEffect(() => {
     if (typeof window !== 'undefined') setHostUrl(window.location.origin);
   }, []);
+
+  useEffect(() => {
+    if (!selectedTemplate?.url) return;
+    
+    let isMounted = true;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (!isMounted) return;
+      const W = img.naturalWidth || 1200;
+      const H = img.naturalHeight || 1800;
+      setTemplateSize({ w: W, h: H });
+
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const ctx = c.getContext('2d', { alpha: true })!;
+      ctx.drawImage(img, 0, 0, W, H);
+      
+      let tplData: Uint8ClampedArray | null = null;
+      try {
+        tplData = ctx.getImageData(0, 0, W, H).data;
+      } catch (e) {
+        console.warn("Could not read template pixel data", e);
+      }
+      
+      const layout = selectedTemplate.layout || (selectedTemplate.isCustom ? 'strip-3' : 'grid-4');
+      const reqPhotos = layout === 'single' ? 1 : layout === 'strip-3' ? 3 : layout === 'grid-4' ? 4 : 4;
+      
+      const slots: {x: number, y: number, w: number, h: number}[] = [];
+      for (let i = 0; i < reqPhotos; i++) {
+        let qx = 0, qy = 0, qw = W, qh = H;
+        
+        if (layout === 'single') {
+          qx = 0; qy = 0; qw = W; qh = H;
+        } else if (layout === 'strip-3') {
+          qx = 0; qy = Math.floor(i * H / 3); qw = W; qh = Math.floor(H / 3);
+        } else {
+          qx = (i % 2) * Math.floor(W / 2);
+          qy = Math.floor(i / 2) * Math.floor(H / 2);
+          qw = Math.floor(W / 2);
+          qh = Math.floor(H / 2);
+        }
+
+        let slotX = qx, slotY = qy, slotW = qw, slotH = qh;
+
+        if (tplData) {
+          let minX = W, minY = H, maxX = 0, maxY = 0;
+          let found = false;
+          for (let y = qy; y < qy + qh; y++) {
+            for (let x = qx; x < qx + qw; x++) {
+              if (tplData[(y * W + x) * 4 + 3] < 40) {
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+                found = true;
+              }
+            }
+          }
+          if (found) {
+            slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
+          }
+        }
+        slots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
+      }
+      setTemplateSlots(slots);
+    };
+    img.src = selectedTemplate.url;
+    
+    return () => { isMounted = false; };
+  }, [selectedTemplate]);
 
   useEffect(() => {
     if (!removeBackground) return;
@@ -695,25 +769,74 @@ export default function PhotoboothStudio() {
 
         <div className="absolute inset-0 lg:relative lg:inset-auto w-full h-full lg:flex-1 min-h-0 bg-black overflow-hidden flex flex-col z-0 lg:z-10">
 
-          {/* Capture Container (Displays native hardware aspect ratio) */}
+          {/* Capture WYSIWYG Container */}
           <div 
             className={`absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden bg-black transition-opacity duration-300 ${appPhase === 'capture' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'}`} 
           >
-            <Webcam
-              ref={webcamRef}
-              audio={false}
-              mirrored={facingMode === 'user'}
-              screenshotFormat="image/png"
-              videoConstraints={{ facingMode, width: 1280, height: 960 }}
-              className={`w-full h-full object-contain ${(appPhase !== 'capture' || removeBackground) ? 'opacity-0' : ''}`}
-            />
+            {/* True WYSIWYG Live Rendering Engine */}
+            <div 
+              className="relative shadow-2xl h-full max-w-full flex-shrink-0" 
+              style={{ aspectRatio: `${templateSize.w} / ${templateSize.h}` }}
+            >
+              {/* 1. Captured Frozen Photos */}
+              {capturedPhotos.map((photo, i) => {
+                const s = templateSlots[i];
+                if (!s) return null;
+                return (
+                  <div 
+                    key={i} 
+                    className="absolute z-10 overflow-hidden"
+                    style={{
+                      left: `${(s.x / templateSize.w) * 100}%`,
+                      top: `${(s.y / templateSize.h) * 100}%`,
+                      width: `${(s.w / templateSize.w) * 100}%`,
+                      height: `${(s.h / templateSize.h) * 100}%`
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo} className="w-full h-full object-cover" alt="" />
+                  </div>
+                );
+              })}
 
-            <canvas
-              ref={maskCanvasRef}
-              width={1280}
-              height={960}
-              className={`absolute inset-0 w-full h-full object-contain ${(appPhase === 'capture' && removeBackground) ? 'opacity-100' : 'opacity-0'}`}
-            />
+              {/* 2. Live Webcam (Only in the active slot!) */}
+              {templateSlots[capturedPhotos.length] && (
+                <div 
+                  className="absolute z-10 overflow-hidden"
+                  style={{
+                    left: `${(templateSlots[capturedPhotos.length].x / templateSize.w) * 100}%`,
+                    top: `${(templateSlots[capturedPhotos.length].y / templateSize.h) * 100}%`,
+                    width: `${(templateSlots[capturedPhotos.length].w / templateSize.w) * 100}%`,
+                    height: `${(templateSlots[capturedPhotos.length].h / templateSize.h) * 100}%`
+                  }}
+                >
+                  <Webcam
+                    ref={webcamRef}
+                    audio={false}
+                    mirrored={facingMode === 'user'}
+                    screenshotFormat="image/png"
+                    videoConstraints={{ facingMode, width: 1280, height: 960 }}
+                    className={`absolute inset-0 w-full h-full object-cover ${(appPhase !== 'capture' || removeBackground) ? 'opacity-0' : ''}`}
+                  />
+                  <canvas
+                    ref={maskCanvasRef}
+                    width={1280}
+                    height={960}
+                    className={`absolute inset-0 w-full h-full object-cover ${(appPhase === 'capture' && removeBackground) ? 'opacity-100' : 'opacity-0'}`}
+                  />
+                </div>
+              )}
+
+              {/* 3. The Template Image Overlay */}
+              {selectedTemplate?.url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img 
+                  src={selectedTemplate.url} 
+                  className="absolute inset-0 w-full h-full z-20 pointer-events-none drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]" 
+                  alt="Template" 
+                />
+              )}
+            </div>
 
             {appPhase === 'capture' && countdown !== null && (
               <div className="absolute inset-0 z-30 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center">
