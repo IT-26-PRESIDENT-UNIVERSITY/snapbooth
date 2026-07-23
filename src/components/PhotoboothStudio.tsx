@@ -15,6 +15,57 @@ declare global {
   interface Window { SelfieSegmentation: any; }
 }
 
+const detectSlots = (tplImg: HTMLImageElement) => {
+  const tc = document.createElement('canvas');
+  tc.width = tplImg.naturalWidth || tplImg.width;
+  tc.height = tplImg.naturalHeight || tplImg.height;
+  const tctx = tc.getContext('2d')!;
+  tctx.drawImage(tplImg, 0, 0);
+
+  const W = tc.width, H = tc.height;
+  let data: Uint8ClampedArray;
+  try {
+    data = tctx.getImageData(0, 0, W, H).data;
+  } catch {
+    return [];
+  }
+
+  const rowTrans = new Float32Array(H);
+  for (let y = 0; y < H; y++) {
+    let cnt = 0;
+    for (let x = 0; x < W; x++) {
+      if (data[(y * W + x) * 4 + 3] < 40) cnt++;
+    }
+    rowTrans[y] = cnt / W;
+  }
+
+  const THRESH = 0.25;
+  const bands: { y1: number; y2: number }[] = [];
+  let inBand = false, start = 0;
+  for (let y = 0; y < H; y++) {
+    if (!inBand && rowTrans[y] > THRESH) { inBand = true; start = y; }
+    else if (inBand && rowTrans[y] <= THRESH) { inBand = false; bands.push({ y1: start, y2: y - 1 }); }
+  }
+  if (inBand) bands.push({ y1: start, y2: H - 1 });
+
+  const slots = bands
+    .map(b => {
+      let x1 = W, x2 = 0;
+      const midY = Math.floor((b.y1 + b.y2) / 2);
+      for (let x = 0; x < W; x++) {
+        if (data[(midY * W + x) * 4 + 3] < 40) {
+          if (x < x1) x1 = x;
+          if (x > x2) x2 = x;
+        }
+      }
+      return { x: x1, y: b.y1, w: x2 - x1 + 1, h: b.y2 - b.y1 + 1 };
+    })
+    .filter(s => s.w > W * 0.1 && s.h > H * 0.04);
+
+  slots.sort((a, b) => a.y - b.y);
+  return slots;
+};
+
 type AppPhase = 'capture' | 'review' | 'result';
 
 export default function PhotoboothStudio() {
@@ -53,13 +104,14 @@ export default function PhotoboothStudio() {
   const recordedChunksRef = useRef<Blob[]>([]);
 
   const requiredPhotos = useMemo(() => {
+    if (templateSlots.length > 0) return templateSlots.length;
     if (!selectedTemplate) return 4;
-    const layout = selectedTemplate.layout || (selectedTemplate.isCustom ? 'strip-3' : 'grid-4');
+    const layout = selectedTemplate.layout || 'auto';
     if (layout === 'single') return 1;
     if (layout === 'strip-3') return 3;
     if (layout === 'grid-4') return 4;
     return 4;
-  }, [selectedTemplate]);
+  }, [templateSlots, selectedTemplate]);
 
   useEffect(() => {
     const active = templates.filter(t => t.active);
@@ -97,47 +149,44 @@ export default function PhotoboothStudio() {
         console.warn("Could not read template pixel data", e);
       }
       
-      const layout = selectedTemplate.layout || (selectedTemplate.isCustom ? 'strip-3' : 'grid-4');
-      const reqPhotos = layout === 'single' ? 1 : layout === 'strip-3' ? 3 : layout === 'grid-4' ? 4 : 4;
+      const layout = selectedTemplate.layout || 'auto';
+      let finalSlots: {x: number, y: number, w: number, h: number}[] = [];
       
-      const slots: {x: number, y: number, w: number, h: number}[] = [];
-      for (let i = 0; i < reqPhotos; i++) {
-        let qx = 0, qy = 0, qw = W, qh = H;
-        
-        if (layout === 'single') {
-          qx = 0; qy = 0; qw = W; qh = H;
-        } else if (layout === 'strip-3') {
-          qx = 0; qy = Math.floor(i * H / 3); qw = W; qh = Math.floor(H / 3);
-        } else {
-          qx = (i % 2) * Math.floor(W / 2);
-          qy = Math.floor(i / 2) * Math.floor(H / 2);
-          qw = Math.floor(W / 2);
-          qh = Math.floor(H / 2);
-        }
+      if (layout === 'grid-4') {
+        for (let i = 0; i < 4; i++) {
+          let qx = (i % 2) * Math.floor(W / 2);
+          let qy = Math.floor(i / 2) * Math.floor(H / 2);
+          let qw = Math.floor(W / 2);
+          let qh = Math.floor(H / 2);
+          let slotX = qx, slotY = qy, slotW = qw, slotH = qh;
 
-        let slotX = qx, slotY = qy, slotW = qw, slotH = qh;
-
-        if (tplData) {
-          let minX = W, minY = H, maxX = 0, maxY = 0;
-          let found = false;
-          for (let y = qy; y < qy + qh; y++) {
-            for (let x = qx; x < qx + qw; x++) {
-              if (tplData[(y * W + x) * 4 + 3] < 40) {
-                if (x < minX) minX = x;
-                if (y < minY) minY = y;
-                if (x > maxX) maxX = x;
-                if (y > maxY) maxY = y;
-                found = true;
+          if (tplData) {
+            let minX = W, minY = H, maxX = 0, maxY = 0;
+            let found = false;
+            for (let y = qy; y < qy + qh; y++) {
+              for (let x = qx; x < qx + qw; x++) {
+                if (tplData[(y * W + x) * 4 + 3] < 40) {
+                  if (x < minX) minX = x;
+                  if (y < minY) minY = y;
+                  if (x > maxX) maxX = x;
+                  if (y > maxY) maxY = y;
+                  found = true;
+                }
               }
             }
+            if (found) {
+              slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
+            }
           }
-          if (found) {
-            slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
-          }
+          finalSlots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
         }
-        slots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
+      } else {
+        finalSlots = detectSlots(img);
+        if (finalSlots.length === 0) {
+          finalSlots = [{x: 0, y: 0, w: W, h: H}];
+        }
       }
-      setTemplateSlots(slots);
+      setTemplateSlots(finalSlots);
     };
     img.src = selectedTemplate.url;
     
@@ -390,57 +439,6 @@ export default function PhotoboothStudio() {
     setFinalImage(null);
   };
 
-  const detectSlots = (tplImg: HTMLImageElement, numSlots: number) => {
-    const tc = document.createElement('canvas');
-    tc.width = tplImg.naturalWidth || tplImg.width;
-    tc.height = tplImg.naturalHeight || tplImg.height;
-    const tctx = tc.getContext('2d')!;
-    tctx.drawImage(tplImg, 0, 0);
-
-    const W = tc.width, H = tc.height;
-    let data: Uint8ClampedArray;
-    try {
-      data = tctx.getImageData(0, 0, W, H).data;
-    } catch {
-      return [];
-    }
-
-    const rowTrans = new Float32Array(H);
-    for (let y = 0; y < H; y++) {
-      let cnt = 0;
-      for (let x = 0; x < W; x++) {
-        if (data[(y * W + x) * 4 + 3] < 40) cnt++;
-      }
-      rowTrans[y] = cnt / W;
-    }
-
-    const THRESH = 0.25;
-    const bands: { y1: number; y2: number }[] = [];
-    let inBand = false, start = 0;
-    for (let y = 0; y < H; y++) {
-      if (!inBand && rowTrans[y] > THRESH) { inBand = true; start = y; }
-      else if (inBand && rowTrans[y] <= THRESH) { inBand = false; bands.push({ y1: start, y2: y - 1 }); }
-    }
-    if (inBand) bands.push({ y1: start, y2: H - 1 });
-
-    const slots = bands
-      .map(b => {
-        let x1 = W, x2 = 0;
-        const midY = Math.floor((b.y1 + b.y2) / 2);
-        for (let x = 0; x < W; x++) {
-          if (data[(midY * W + x) * 4 + 3] < 40) {
-            if (x < x1) x1 = x;
-            if (x > x2) x2 = x;
-          }
-        }
-        return { x: x1, y: b.y1, w: x2 - x1 + 1, h: b.y2 - b.y1 + 1 };
-      })
-      .filter(s => s.w > W * 0.1 && s.h > H * 0.04);
-
-    slots.sort((a, b) => a.y - b.y);
-    return slots;
-  };
-
   const compositePhotos = async (template: typeof selectedTemplate, photos: string[], addWatermark: boolean = false): Promise<string | null> => {
     if (!template) return null;
 
@@ -471,55 +469,55 @@ export default function PhotoboothStudio() {
       'builtin-2': [{ x: 60, y: 60, w: 1080, h: 1660 }],
       'builtin-3': [{ x: 150, y: 50, w: 900, h: 1700 }],
     };
-    const builtinHint = template?.id ? builtinSlots[template.id] : undefined;
-    const slots = builtinHint || detectSlots(tplImg, photos.length);
+    
+    let slots = template?.id ? builtinSlots[template.id] : undefined;
+    if (!slots) {
+      const layout = template.layout || 'auto';
+      if (layout === 'grid-4') {
+        slots = [];
+        for (let i = 0; i < 4; i++) {
+          let qx = (i % 2) * Math.floor(W / 2);
+          let qy = Math.floor(i / 2) * Math.floor(H / 2);
+          let qw = Math.floor(W / 2);
+          let qh = Math.floor(H / 2);
+          let slotX = qx, slotY = qy, slotW = qw, slotH = qh;
+
+          if (tplData) {
+            let minX = W, minY = H, maxX = 0, maxY = 0;
+            let found = false;
+            for (let y = qy; y < qy + qh; y++) {
+              for (let x = qx; x < qx + qw; x++) {
+                if (tplData[(y * W + x) * 4 + 3] < 40) {
+                  if (x < minX) minX = x;
+                  if (y < minY) minY = y;
+                  if (x > maxX) maxX = x;
+                  if (y > maxY) maxY = y;
+                  found = true;
+                }
+              }
+            }
+            if (found) {
+              slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
+            }
+          }
+          slots.push({ x: slotX, y: slotY, w: slotW, h: slotH });
+        }
+      } else {
+        slots = detectSlots(tplImg);
+        if (slots.length === 0) {
+          slots = [{x: 0, y: 0, w: W, h: H}];
+        }
+      }
+    }
 
     for (let i = 0; i < photos.length; i++) {
       const pImg = new Image();
       await new Promise(r => { pImg.onload = r; pImg.src = photos[i]; });
       const aspect = pImg.width / pImg.height;
 
-      let slotX: number, slotY: number, slotW: number, slotH: number;
-
-      if (slots.length >= photos.length) {
-        const s = slots[i];
-        slotX = s.x; slotY = s.y; slotW = s.w; slotH = s.h;
-      } else {
-        const layout = template.layout || (template.isCustom ? 'strip-3' : 'grid-4');
-        let qx = 0, qy = 0, qw = W, qh = H;
-        
-        if (layout === 'single') {
-          qx = 0; qy = 0; qw = W; qh = H;
-        } else if (layout === 'strip-3') {
-          qx = 0; qy = Math.floor(i * H / 3); qw = W; qh = Math.floor(H / 3);
-        } else {
-          qx = (i % 2) * Math.floor(W / 2);
-          qy = Math.floor(i / 2) * Math.floor(H / 2);
-          qw = Math.floor(W / 2);
-          qh = Math.floor(H / 2);
-        }
-
-        slotX = qx; slotY = qy; slotW = qw; slotH = qh;
-
-        // Precise hole detection inside the quadrant to perfectly align the photo
-        if (tplData) {
-          let minX = W, minY = H, maxX = 0, maxY = 0;
-          let found = false;
-          for (let y = qy; y < qy + qh; y++) {
-            for (let x = qx; x < qx + qw; x++) {
-              if (tplData[(y * W + x) * 4 + 3] < 40) {
-                if (x < minX) minX = x;
-                if (y < minY) minY = y;
-                if (x > maxX) maxX = x;
-                if (y > maxY) maxY = y;
-                found = true;
-              }
-            }
-          }
-          if (found) {
-            slotX = minX; slotY = minY; slotW = maxX - minX + 1; slotH = maxY - minY + 1;
-          }
-        }
+      let slotX = 0, slotY = 0, slotW = W, slotH = H;
+      if (slots && slots[i]) {
+        slotX = slots[i].x; slotY = slots[i].y; slotW = slots[i].w; slotH = slots[i].h;
       }
 
       const slotAspect = slotW / slotH;
