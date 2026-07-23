@@ -124,9 +124,11 @@ const applyAspectRatio = (slots: {x: number, y: number, w: number, h: number}[],
     let newH = s.h;
 
     if (currentRatio > targetRatio) {
-      newH = s.w / targetRatio;
-    } else {
+      // Slot is wider than target — shrink width to fit
       newW = s.h * targetRatio;
+    } else {
+      // Slot is taller than target — shrink height to fit
+      newH = s.w / targetRatio;
     }
 
     return {
