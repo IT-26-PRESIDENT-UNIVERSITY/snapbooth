@@ -971,7 +971,7 @@ export default function PhotoboothStudio() {
 
               <div className="flex-1 min-h-0 relative w-full flex items-center justify-center mb-4">
                 {previewImage ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+                  //  eslint-disable-next-line @next/next/no-img-element
                   <img src={previewImage} alt="Preview" className="max-h-full max-w-full object-contain rounded-xl shadow-2xl border-2 border-white/20 lg:border-gray-200" />
                 ) : (
                   <div className="flex flex-col items-center justify-center text-center gap-3 py-10">
